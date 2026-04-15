@@ -1,0 +1,6 @@
+@ScholarFlow.WebAPI_HostAddress = http://localhost:5279
+
+GET {{ScholarFlow.WebAPI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

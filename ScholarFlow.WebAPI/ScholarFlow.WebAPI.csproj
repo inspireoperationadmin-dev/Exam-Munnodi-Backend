@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>scholarflow-webapi-2026</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ScholarFlow.Infrastructure\ScholarFlow.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\ScholarFlow.Modules.Identity\ScholarFlow.Modules.Identity.csproj" />
+    <ProjectReference Include="..\Modules\ScholarFlow.Modules.Academic\ScholarFlow.Modules.Academic.csproj" />
+    <ProjectReference Include="..\Modules\ScholarFlow.Modules.Examination\ScholarFlow.Modules.Examination.csproj" />
+    <ProjectReference Include="..\Modules\ScholarFlow.Modules.Analytics\ScholarFlow.Modules.Analytics.csproj" />
+    <ProjectReference Include="..\Modules\ScholarFlow.Modules.UserProfiles\ScholarFlow.Modules.UserProfiles.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.2" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Scalar.AspNetCore" Version="1.2.42" />
+  </ItemGroup>
+
+</Project>

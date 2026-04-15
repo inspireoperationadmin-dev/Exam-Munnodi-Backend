@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/Modules/">
+    <Project Path="Modules/ScholarFlow.Modules.Academic/ScholarFlow.Modules.Academic.csproj" />
+    <Project Path="Modules/ScholarFlow.Modules.Analytics/ScholarFlow.Modules.Analytics.csproj" />
+    <Project Path="Modules/ScholarFlow.Modules.Examination/ScholarFlow.Modules.Examination.csproj" />
+    <Project Path="Modules/ScholarFlow.Modules.Identity/ScholarFlow.Modules.Identity.csproj" />
+    <Project Path="Modules/ScholarFlow.Modules.UserProfiles/ScholarFlow.Modules.UserProfiles.csproj" />
+  </Folder>
+  <Project Path="ScholarFlow.Domain/ScholarFlow.Domain.csproj" />
+  <Project Path="ScholarFlow.Infrastructure/ScholarFlow.Infrastructure.csproj" />
+  <Project Path="ScholarFlow.SharedKernel/ScholarFlow.SharedKernel.csproj" />
+  <Project Path="ScholarFlow.WebAPI/ScholarFlow.WebAPI.csproj" />
+</Solution>
