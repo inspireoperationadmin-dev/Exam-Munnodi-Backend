@@ -1,4 +1,5 @@
 using MediatR;
+using ScholarFlow.Domain.Enums;
 
 namespace ScholarFlow.Modules.Academic.Commands.Papers.AddQuestionToPaper;
 
@@ -8,6 +9,7 @@ public sealed record AddQuestionToPaperCommand(
     string QuestionText,
     string? QuestionImageUrl,
     int OrderIndex,
+    DifficultyLevel? ManualDifficulty,
     List<AddOptionItem> Options) : IRequest<Guid>;
 
 public sealed record AddOptionItem(

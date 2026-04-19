@@ -12,7 +12,7 @@ using ScholarFlow.Infrastructure.Persistence;
 namespace ScholarFlow.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260412050430_InitialCreate")]
+    [Migration("20260419145602_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -511,6 +511,9 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<int?>("ManualDifficulty")
+                        .HasColumnType("int");
+
                     b.Property<int>("OrderIndex")
                         .HasColumnType("int");
 
@@ -528,6 +531,9 @@ namespace ScholarFlow.Infrastructure.Migrations
 
                     b.Property<Guid>("SubTopicId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("SystemDifficulty")
+                        .HasColumnType("int");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");

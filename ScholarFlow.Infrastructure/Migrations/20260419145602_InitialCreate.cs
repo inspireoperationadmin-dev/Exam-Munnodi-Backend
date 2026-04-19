@@ -485,6 +485,8 @@ namespace ScholarFlow.Infrastructure.Migrations
                     QuestionText = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: false),
                     QuestionImageUrl = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
                     OrderIndex = table.Column<int>(type: "int", nullable: false),
+                    ManualDifficulty = table.Column<int>(type: "int", nullable: true),
+                    SystemDifficulty = table.Column<int>(type: "int", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),

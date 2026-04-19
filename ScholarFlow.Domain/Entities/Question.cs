@@ -1,4 +1,5 @@
 using ScholarFlow.Domain.Entities.Base;
+using ScholarFlow.Domain.Enums;
 
 namespace ScholarFlow.Domain.Entities;
 
@@ -14,6 +15,12 @@ public class Question : AuditableAggregateRoot
     public string? QuestionImageUrl { get; private set; }
     public int OrderIndex { get; private set; }
 
+    /// <summary>Cognitive nature set manually by Admin/Teacher.</summary>
+    public DifficultyLevel? ManualDifficulty { get; private set; }
+
+    /// <summary>Performance-based difficulty auto-calculated by the system. Requires ≥5 attempts.</summary>
+    public SystemDifficultyLevel? SystemDifficulty { get; private set; }
+
     public Paper Paper { get; set; } = null!;
     public SubTopic SubTopic { get; set; } = null!;
     public ICollection<Option> Options { get; set; } = new List<Option>();
@@ -22,27 +29,34 @@ public class Question : AuditableAggregateRoot
 
     private Question() { }
 
-    public void Update(Guid subTopicId, string questionText, string? questionImageUrl, int orderIndex)
+    public void Update(Guid subTopicId, string questionText, string? questionImageUrl, int orderIndex, DifficultyLevel? manualDifficulty)
     {
         SubTopicId       = subTopicId;
         QuestionText     = questionText;
         QuestionImageUrl = questionImageUrl;
         OrderIndex       = orderIndex;
+        ManualDifficulty = manualDifficulty;
     }
+
+    /// <summary>Called by Analytics module after accumulating enough student attempt data.</summary>
+    public void UpdateSystemDifficulty(SystemDifficultyLevel level)
+        => SystemDifficulty = level;
 
     public static Question Create(
         Guid paperId,
         Guid subTopicId,
         string questionText,
         int orderIndex,
-        string? questionImageUrl = null)
+        string? questionImageUrl = null,
+        DifficultyLevel? manualDifficulty = null)
         => new()
         {
-            Id = Guid.NewGuid(),
-            PaperId = paperId,
-            SubTopicId = subTopicId,
-            QuestionText = questionText,
-            OrderIndex = orderIndex,
-            QuestionImageUrl = questionImageUrl
+            Id               = Guid.NewGuid(),
+            PaperId          = paperId,
+            SubTopicId       = subTopicId,
+            QuestionText     = questionText,
+            OrderIndex       = orderIndex,
+            QuestionImageUrl = questionImageUrl,
+            ManualDifficulty = manualDifficulty
         };
 }

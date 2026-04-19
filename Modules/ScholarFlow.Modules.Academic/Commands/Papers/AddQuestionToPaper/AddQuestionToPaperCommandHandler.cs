@@ -29,7 +29,8 @@ public sealed class AddQuestionToPaperCommandHandler(
             subTopicId:       request.SubTopicId,
             questionText:     request.QuestionText,
             orderIndex:       request.OrderIndex,
-            questionImageUrl: request.QuestionImageUrl);
+            questionImageUrl: request.QuestionImageUrl,
+            manualDifficulty: request.ManualDifficulty);
 
         await questionRepo.AddAsync(question, ct);
         await questionRepo.SaveChangesAsync(ct);

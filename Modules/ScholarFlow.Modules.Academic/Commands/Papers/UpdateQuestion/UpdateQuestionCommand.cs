@@ -1,4 +1,5 @@
 using MediatR;
+using ScholarFlow.Domain.Enums;
 
 namespace ScholarFlow.Modules.Academic.Commands.Papers.UpdateQuestion;
 
@@ -7,4 +8,5 @@ public sealed record UpdateQuestionCommand(
     Guid SubTopicId,
     string QuestionText,
     string? QuestionImageUrl,
-    int OrderIndex) : IRequest;
+    int OrderIndex,
+    DifficultyLevel? ManualDifficulty) : IRequest;

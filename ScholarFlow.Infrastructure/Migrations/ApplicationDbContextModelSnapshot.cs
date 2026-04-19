@@ -508,6 +508,9 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<int?>("ManualDifficulty")
+                        .HasColumnType("int");
+
                     b.Property<int>("OrderIndex")
                         .HasColumnType("int");
 
@@ -525,6 +528,9 @@ namespace ScholarFlow.Infrastructure.Migrations
 
                     b.Property<Guid>("SubTopicId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("SystemDifficulty")
+                        .HasColumnType("int");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");

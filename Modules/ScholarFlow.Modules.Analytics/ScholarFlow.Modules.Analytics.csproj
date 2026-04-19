@@ -10,6 +10,7 @@
     <ProjectReference Include="..\..\ScholarFlow.SharedKernel\ScholarFlow.SharedKernel.csproj" />
     <ProjectReference Include="..\..\ScholarFlow.Domain\ScholarFlow.Domain.csproj" />
     <ProjectReference Include="..\..\ScholarFlow.Infrastructure\ScholarFlow.Infrastructure.csproj" />
+    <ProjectReference Include="..\ScholarFlow.Modules.Academic\ScholarFlow.Modules.Academic.csproj" />
   </ItemGroup>
 
   <ItemGroup>

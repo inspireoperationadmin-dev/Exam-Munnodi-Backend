@@ -23,7 +23,7 @@ public sealed class UpdateQuestionCommandHandler(
             if (!isOwner) throw new ForbiddenException("You can only update questions in your own papers.");
         }
 
-        question.Update(request.SubTopicId, request.QuestionText, request.QuestionImageUrl, request.OrderIndex);
+        question.Update(request.SubTopicId, request.QuestionText, request.QuestionImageUrl, request.OrderIndex, request.ManualDifficulty);
         questionRepo.Update(question);
         await questionRepo.SaveChangesAsync(ct);
     }

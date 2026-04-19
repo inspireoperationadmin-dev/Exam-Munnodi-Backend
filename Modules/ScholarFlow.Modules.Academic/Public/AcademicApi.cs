@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ScholarFlow.Domain.Enums;
 using ScholarFlow.Domain.Interfaces;
 
 namespace ScholarFlow.Modules.Academic.Public;
@@ -32,5 +33,31 @@ internal sealed class AcademicApi(IApplicationDbContext db) : IAcademicApi
                 q.Id,
                 db.Options.Where(o => o.QuestionId == q.Id && o.IsCorrect).Select(o => o.Id).First()))
             .ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<QuestionPoolItem>> GetQuestionPoolAsync(Guid subjectId, CancellationToken ct = default)
+    {
+        var items = await db.Questions
+            .Where(q => !q.IsDeleted
+                     && q.SubTopic.Topic.SubjectId == subjectId)
+            .Select(q => new QuestionPoolItem(
+                q.Id,
+                q.SubTopicId,
+                q.SubTopic.TopicId,
+                q.SubTopic.Topic.SubjectId,
+                q.ManualDifficulty,
+                q.SystemDifficulty))
+            .ToListAsync(ct);
+
+        return items.AsReadOnly();
+    }
+
+    public async Task UpdateSystemDifficultyAsync(Guid questionId, SystemDifficultyLevel level, CancellationToken ct = default)
+    {
+        var question = await db.Questions.FindAsync([questionId], ct);
+        if (question is null) return;
+
+        question.UpdateSystemDifficulty(level);
+        await db.SaveChangesAsync(ct);
     }
 }

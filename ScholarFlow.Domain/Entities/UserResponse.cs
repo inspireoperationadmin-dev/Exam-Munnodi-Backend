@@ -27,6 +27,12 @@ public class UserResponse
         ResponseStatus = ResponseStatus.Answered;
     }
 
+    public void ClearOption()
+    {
+        SelectedOptionId = null;
+        ResponseStatus = ResponseStatus.Visited;
+    }
+
     // Called only by ExamSession.Complete()
     internal void Award(decimal marks, bool isCorrect)
     {
