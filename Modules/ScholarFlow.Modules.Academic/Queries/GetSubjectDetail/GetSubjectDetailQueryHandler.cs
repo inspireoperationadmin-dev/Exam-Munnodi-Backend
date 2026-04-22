@@ -24,7 +24,7 @@ public sealed class GetSubjectDetailQueryHandler(ISqlConnectionFactory sql)
                 (SELECT COUNT(*) FROM Topics t WHERE t.SubjectId = s.Id AND t.IsDeleted = 0) AS TopicCount
             FROM Subjects s
             LEFT JOIN SubjectStreams ss ON ss.SubjectId = s.Id
-            LEFT JOIN AcademicStreams st ON st.Id = ss.StreamId AND st.IsDeleted = 0
+            LEFT JOIN Streams st ON st.Id = ss.StreamId AND st.IsDeleted = 0
             WHERE s.Id = @Id AND s.IsDeleted = 0
             """, new { request.Id });
 
