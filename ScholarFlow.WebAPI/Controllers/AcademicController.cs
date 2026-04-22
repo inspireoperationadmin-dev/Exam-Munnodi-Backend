@@ -56,12 +56,12 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
         => Ok(await mediator.Send(new GetAllStreamsQuery(), ct));
 
     [HttpPost("streams")]
-    [Authorize(Roles = AppRole.Admin)]
+    [Authorize(Roles = AppRole.Admin + "," + AppRole.SuperAdmin)]
     public async Task<IActionResult> CreateStream([FromBody] CreateStreamCommand command, CancellationToken ct)
         => Ok(await mediator.Send(command, ct));
 
     [HttpPut("streams/{id:guid}")]
-    [Authorize(Roles = AppRole.Admin)]
+    [Authorize(Roles = AppRole.Admin + "," + AppRole.SuperAdmin)]
     public async Task<IActionResult> UpdateStream(Guid id, [FromBody] UpdateStreamCommand command, CancellationToken ct)
     {
         await mediator.Send(command with { Id = id }, ct);
@@ -69,7 +69,7 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
     }
 
     [HttpDelete("streams/{id:guid}")]
-    [Authorize(Roles = AppRole.Admin)]
+    [Authorize(Roles = AppRole.Admin+ "," + AppRole.SuperAdmin)]
     public async Task<IActionResult> DeleteStream(Guid id, CancellationToken ct)
     {
         await mediator.Send(new DeleteStreamCommand(id), ct);
@@ -87,12 +87,12 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
         => Ok(await mediator.Send(new GetSubjectDetailQuery(id), ct));
 
     [HttpPost("subjects")]
-    [Authorize(Roles = AppRole.Admin)]
+    [Authorize(Roles = AppRole.Admin + "," + AppRole.SuperAdmin)]
     public async Task<IActionResult> CreateSubject([FromBody] CreateSubjectCommand command, CancellationToken ct)
         => Ok(await mediator.Send(command, ct));
 
     [HttpPut("subjects/{id:guid}")]
-    [Authorize(Roles = AppRole.Admin)]
+    [Authorize(Roles = AppRole.Admin + "," + AppRole.SuperAdmin)]
     public async Task<IActionResult> UpdateSubject(Guid id, [FromBody] UpdateSubjectCommand command, CancellationToken ct)
     {
         await mediator.Send(command with { Id = id }, ct);
@@ -100,7 +100,7 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
     }
 
     [HttpDelete("subjects/{id:guid}")]
-    [Authorize(Roles = AppRole.Admin)]
+    [Authorize(Roles = AppRole.Admin + "," + AppRole.SuperAdmin)]
     public async Task<IActionResult> DeleteSubject(Guid id, CancellationToken ct)
     {
         await mediator.Send(new DeleteSubjectCommand(id), ct);
@@ -108,7 +108,7 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
     }
 
     [HttpPost("subjects/{id:guid}/streams/{streamId:guid}")]
-    [Authorize(Roles = AppRole.Admin)]
+    [Authorize(Roles = AppRole.Admin + "," + AppRole.SuperAdmin)]
     public async Task<IActionResult> AssignSubjectToStream(Guid id, Guid streamId, CancellationToken ct)
     {
         await mediator.Send(new AssignSubjectToStreamCommand(id, streamId), ct);
@@ -116,7 +116,7 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
     }
 
     [HttpDelete("subjects/{id:guid}/streams/{streamId:guid}")]
-    [Authorize(Roles = AppRole.Admin)]
+    [Authorize(Roles = AppRole.Admin + "," + AppRole.SuperAdmin)]
     public async Task<IActionResult> RemoveSubjectFromStream(Guid id, Guid streamId, CancellationToken ct)
     {
         await mediator.Send(new RemoveSubjectFromStreamCommand(id, streamId), ct);
@@ -130,12 +130,12 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
         => Ok(await mediator.Send(new GetTopicsBySubjectQuery(subjectId), ct));
 
     [HttpPost("topics")]
-    [Authorize(Roles = AppRole.Admin)]
+    [Authorize(Roles = AppRole.Admin + "," + AppRole.SuperAdmin)]
     public async Task<IActionResult> CreateTopic([FromBody] CreateTopicCommand command, CancellationToken ct)
         => Ok(await mediator.Send(command, ct));
 
     [HttpPut("topics/{id:guid}")]
-    [Authorize(Roles = AppRole.Admin)]
+    [Authorize(Roles = AppRole.Admin + "," + AppRole.SuperAdmin)]
     public async Task<IActionResult> UpdateTopic(Guid id, [FromBody] UpdateTopicCommand command, CancellationToken ct)
     {
         await mediator.Send(command with { Id = id }, ct);
@@ -143,7 +143,7 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
     }
 
     [HttpDelete("topics/{id:guid}")]
-    [Authorize(Roles = AppRole.Admin)]
+    [Authorize(Roles = AppRole.Admin + "," + AppRole.SuperAdmin)]
     public async Task<IActionResult> DeleteTopic(Guid id, CancellationToken ct)
     {
         await mediator.Send(new DeleteTopicCommand(id), ct);
@@ -153,12 +153,12 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
     // ── SubTopics ─────────────────────────────────────────────────────────────
 
     [HttpPost("topics/{topicId:guid}/subtopics")]
-    [Authorize(Roles = AppRole.Admin)]
+    [Authorize(Roles = AppRole.Admin + "," + AppRole.SuperAdmin)]
     public async Task<IActionResult> CreateSubTopic(Guid topicId, [FromBody] CreateSubTopicCommand command, CancellationToken ct)
         => Ok(await mediator.Send(command with { TopicId = topicId }, ct));
 
     [HttpPut("subtopics/{id:guid}")]
-    [Authorize(Roles = AppRole.Admin)]
+    [Authorize(Roles = AppRole.Admin + "," + AppRole.SuperAdmin)]
     public async Task<IActionResult> UpdateSubTopic(Guid id, [FromBody] UpdateSubTopicCommand command, CancellationToken ct)
     {
         await mediator.Send(command with { Id = id }, ct);
@@ -166,7 +166,7 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
     }
 
     [HttpDelete("subtopics/{id:guid}")]
-    [Authorize(Roles = AppRole.Admin)]
+    [Authorize(Roles = AppRole.Admin + "," + AppRole.SuperAdmin)]
     public async Task<IActionResult> DeleteSubTopic(Guid id, CancellationToken ct)
     {
         await mediator.Send(new DeleteSubTopicCommand(id), ct);

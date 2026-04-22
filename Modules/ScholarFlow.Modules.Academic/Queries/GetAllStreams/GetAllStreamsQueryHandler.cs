@@ -14,7 +14,7 @@ public sealed class GetAllStreamsQueryHandler(ISqlConnectionFactory sql)
 
         var rows = await conn.QueryAsync<StreamDto>("""
             SELECT Id, Name, Description
-            FROM AcademicStreams
+            FROM Streams
             WHERE IsDeleted = 0
             ORDER BY Name
             """);
