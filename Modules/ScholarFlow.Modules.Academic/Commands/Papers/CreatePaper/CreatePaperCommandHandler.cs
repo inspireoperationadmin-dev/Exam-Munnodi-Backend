@@ -14,10 +14,13 @@ public sealed class CreatePaperCommandHandler(
 {
     public async Task<Guid> Handle(CreatePaperCommand request, CancellationToken ct)
     {
-        if (await paperRepo.ExistsByTitleAsync(request.Title, ct))
-            throw new ConflictException($"A paper titled '{request.Title}' already exists.");
+        var exists = await paperRepo.ExistsByCompositeKeyAsync(
+            request.Title, request.SubjectId, request.Year, request.Type, request.Medium, ct);
 
-        // Teachers always create private papers; Admins respect the IsPublic field.
+        if (exists)
+            throw new ConflictException(
+                $"A paper with the same title, subject, year, type, and medium already exists.");
+
         var isPublic = currentUser.IsInRole(AppRole.Teacher) ? false : request.IsPublic;
 
         Guid? teacherProfileId = null;
@@ -28,15 +31,15 @@ public sealed class CreatePaperCommandHandler(
         }
 
         var paper = Paper.Create(
-            subjectId:         request.SubjectId,
-            title:             request.Title,
-            year:              request.Year,
-            type:              request.Type,
-            medium:            request.Medium,
-            isPublic:          isPublic,
-            negativeMarkValue: request.NegativeMarkValue,
-            sitting:           request.Sitting,
-            officialPaperCode: request.OfficialPaperCode,
+            subjectId:          request.SubjectId,
+            title:              request.Title,
+            year:               request.Year,
+            type:               request.Type,
+            medium:             request.Medium,
+            isPublic:           isPublic,
+            negativeMarkValue:  request.NegativeMarkValue,
+            sitting:            request.Sitting,
+            officialPaperCode:  request.OfficialPaperCode,
             createdByTeacherId: teacherProfileId);
 
         await paperRepo.AddAsync(paper, ct);

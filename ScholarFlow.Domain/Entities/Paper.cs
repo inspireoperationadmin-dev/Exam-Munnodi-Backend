@@ -59,6 +59,7 @@ public class Paper : AuditableAggregateRoot
     }
 
     public void Update(
+        Guid? subjectId,
         string title,
         int year,
         PaperType type,
@@ -70,6 +71,7 @@ public class Paper : AuditableAggregateRoot
         if (negativeMarkValue < 0 || negativeMarkValue > 1)
             throw new Exceptions.DomainException("Negative mark value must be between 0 and 1.");
 
+        SubjectId         = subjectId;
         Title             = title;
         Year              = year;
         Type              = type;

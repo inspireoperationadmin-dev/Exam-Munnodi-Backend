@@ -189,12 +189,12 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
         => Ok(await mediator.Send(new GetPaperDetailQuery(id), ct));
 
     [HttpPost("papers")]
-    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher}")]
+    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher},{AppRole.SuperAdmin}")]
     public async Task<IActionResult> CreatePaper([FromBody] CreatePaperCommand command, CancellationToken ct)
         => Ok(await mediator.Send(command, ct));
 
     [HttpPut("papers/{id:guid}")]
-    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher}")]
+    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher},{AppRole.SuperAdmin}")]
     public async Task<IActionResult> UpdatePaper(Guid id, [FromBody] UpdatePaperCommand command, CancellationToken ct)
     {
         await mediator.Send(command with { Id = id }, ct);
@@ -202,7 +202,7 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
     }
 
     [HttpDelete("papers/{id:guid}")]
-    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher}")]
+    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher},{AppRole.SuperAdmin}")]
     public async Task<IActionResult> DeletePaper(Guid id, CancellationToken ct)
     {
         await mediator.Send(new DeletePaperCommand(id), ct);
@@ -210,7 +210,7 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
     }
 
     [HttpPatch("papers/{id:guid}/visibility")]
-    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher}")]
+    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher},{AppRole.SuperAdmin}")]
     public async Task<IActionResult> ToggleVisibility(Guid id, [FromBody] TogglePaperVisibilityCommand command, CancellationToken ct)
     {
         await mediator.Send(command with { Id = id }, ct);
@@ -224,12 +224,12 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
         => Ok(await mediator.Send(new GetPaperQuestionsQuery(paperId), ct));
 
     [HttpPost("papers/{paperId:guid}/questions")]
-    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher}")]
+    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher},{AppRole.SuperAdmin}")]
     public async Task<IActionResult> AddQuestion(Guid paperId, [FromBody] AddQuestionToPaperCommand command, CancellationToken ct)
         => Ok(await mediator.Send(command with { PaperId = paperId }, ct));
 
     [HttpPut("questions/{id:guid}")]
-    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher}")]
+    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher},{AppRole.SuperAdmin}")]
     public async Task<IActionResult> UpdateQuestion(Guid id, [FromBody] UpdateQuestionCommand command, CancellationToken ct)
     {
         await mediator.Send(command with { Id = id }, ct);
@@ -237,7 +237,7 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
     }
 
     [HttpDelete("questions/{id:guid}")]
-    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher}")]
+    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher},{AppRole.SuperAdmin}")]
     public async Task<IActionResult> DeleteQuestion(Guid id, CancellationToken ct)
     {
         await mediator.Send(new DeleteQuestionCommand(id), ct);
@@ -247,7 +247,7 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
     // ── Options ───────────────────────────────────────────────────────────────
 
     [HttpPut("options/{id:guid}")]
-    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher}")]
+    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher},{AppRole.SuperAdmin}")]
     public async Task<IActionResult> UpdateOption(Guid id, [FromBody] UpdateOptionCommand command, CancellationToken ct)
     {
         await mediator.Send(command with { Id = id }, ct);
@@ -257,12 +257,12 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
     // ── Explanations ──────────────────────────────────────────────────────────
 
     [HttpPost("questions/{questionId:guid}/explanation")]
-    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher}")]
+    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher},{AppRole.SuperAdmin}")]
     public async Task<IActionResult> AddExplanation(Guid questionId, [FromBody] AddExplanationCommand command, CancellationToken ct)
         => Ok(await mediator.Send(command with { QuestionId = questionId }, ct));
 
     [HttpPut("explanations/{id:guid}")]
-    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher}")]
+    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher},{AppRole.SuperAdmin}")]
     public async Task<IActionResult> UpdateExplanation(Guid id, [FromBody] UpdateExplanationCommand command, CancellationToken ct)
     {
         await mediator.Send(command with { Id = id }, ct);
@@ -270,7 +270,7 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
     }
 
     [HttpDelete("explanations/{id:guid}")]
-    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher}")]
+    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher},{AppRole.SuperAdmin}")]
     public async Task<IActionResult> DeleteExplanation(Guid id, CancellationToken ct)
     {
         await mediator.Send(new DeleteExplanationCommand(id), ct);

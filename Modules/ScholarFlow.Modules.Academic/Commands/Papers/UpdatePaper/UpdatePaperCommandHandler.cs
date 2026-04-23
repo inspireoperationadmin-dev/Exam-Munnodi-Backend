@@ -22,7 +22,15 @@ public sealed class UpdatePaperCommandHandler(
             if (!isOwner) throw new ForbiddenException("You can only update your own papers.");
         }
 
+        var duplicate = await paperRepo.ExistsByCompositeKeyExcludingIdAsync(
+            request.Id, request.Title, request.SubjectId, request.Year, request.Type, request.Medium, ct);
+
+        if (duplicate)
+            throw new ConflictException(
+                "A paper with the same title, subject, year, type, and medium already exists.");
+
         paper.Update(
+            subjectId:         request.SubjectId,
             title:             request.Title,
             year:              request.Year,
             type:              request.Type,

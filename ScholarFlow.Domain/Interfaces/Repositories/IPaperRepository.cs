@@ -7,8 +7,8 @@ public interface IPaperRepository
 {
     Task<List<Paper>> GetAllAsync(Guid? subjectId, PaperType? type, PaperMedium? medium, int? year, CancellationToken ct = default);
     Task<Paper?> GetByIdAsync(Guid id, CancellationToken ct = default);
-    Task<bool> ExistsByTitleAsync(string title, CancellationToken ct = default);
-    /// <summary>Returns true if the paper was created by the given userId (via TeacherProfile lookup).</summary>
+    Task<bool> ExistsByCompositeKeyAsync(string title, Guid? subjectId, int year, PaperType type, PaperMedium medium, CancellationToken ct = default);
+    Task<bool> ExistsByCompositeKeyExcludingIdAsync(Guid excludeId, string title, Guid? subjectId, int year, PaperType type, PaperMedium medium, CancellationToken ct = default);
     Task<bool> IsTeacherOwnerAsync(Guid paperId, Guid userId, CancellationToken ct = default);
     Task<Guid?> GetTeacherProfileIdByUserIdAsync(Guid userId, CancellationToken ct = default);
     Task AddAsync(Paper paper, CancellationToken ct = default);

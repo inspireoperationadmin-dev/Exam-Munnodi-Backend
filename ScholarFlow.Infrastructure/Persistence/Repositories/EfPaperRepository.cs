@@ -18,15 +18,39 @@ public sealed class EfPaperRepository(ApplicationDbContext db) : IPaperRepositor
         if (medium.HasValue)    query = query.Where(p => p.Medium == medium);
         if (year.HasValue)      query = query.Where(p => p.Year == year);
 
-        return query.OrderByDescending(p => p.Year).ThenBy(p => p.Title).ToListAsync(ct);
+        return query
+            .OrderByDescending(p => p.Year)
+            .ThenBy(p => p.Title)
+            .ToListAsync(ct);
     }
 
     public Task<Paper?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => db.Papers.FirstOrDefaultAsync(p => p.Id == id, ct);
 
-    public Task<bool> ExistsByTitleAsync(string title, CancellationToken ct = default)
-        => db.Papers.AnyAsync(p => p.Title == title, ct);
+    public Task<bool> ExistsByCompositeKeyAsync(
+        string title, Guid? subjectId, int year, PaperType type, PaperMedium medium,
+        CancellationToken ct = default)
+        => db.Papers.AnyAsync(
+            p => p.Title      == title
+              && p.SubjectId  == subjectId
+              && p.Year       == year
+              && p.Type       == type
+              && p.Medium     == medium,
+            ct);
 
+    public Task<bool> ExistsByCompositeKeyExcludingIdAsync(
+    Guid excludeId, string title, Guid? subjectId, int year, PaperType type, PaperMedium medium,
+    CancellationToken ct = default)
+    => db.Papers.AnyAsync(
+        p => p.Id       != excludeId
+          && p.Title    == title
+          && p.SubjectId == subjectId
+          && p.Year     == year
+          && p.Type     == type
+          && p.Medium   == medium,
+        ct);
+
+        
     public Task<bool> IsTeacherOwnerAsync(Guid paperId, Guid userId, CancellationToken ct = default)
         => db.Papers
             .Where(p => p.Id == paperId)

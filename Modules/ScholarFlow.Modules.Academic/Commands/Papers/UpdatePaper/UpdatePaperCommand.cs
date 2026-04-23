@@ -5,6 +5,7 @@ namespace ScholarFlow.Modules.Academic.Commands.Papers.UpdatePaper;
 
 public sealed record UpdatePaperCommand(
     Guid Id,
+    Guid? SubjectId,
     string Title,
     int Year,
     PaperType Type,

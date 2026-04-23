@@ -63,7 +63,12 @@ builder.Services.AddProblemDetails();
 
 // ── API ───────────────────────────────────────────────────────────────────────
 builder.Services.AddControllers(options =>
-    options.Filters.Add<ApiResponseFilter>());
+    options.Filters.Add<ApiResponseFilter>())
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(
+            new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
 
 builder.Services.AddOpenApi(options =>
 {
