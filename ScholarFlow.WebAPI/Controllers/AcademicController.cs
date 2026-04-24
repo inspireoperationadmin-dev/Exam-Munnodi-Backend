@@ -29,6 +29,7 @@ using ScholarFlow.Modules.Academic.Commands.Topics.UpdateSubTopic;
 using ScholarFlow.Modules.Academic.Commands.Topics.UpdateTopic;
 using ScholarFlow.Modules.Academic.Queries.GetAcademicTree;
 using ScholarFlow.Modules.Academic.Queries.GetAllStreams;
+using ScholarFlow.Modules.Academic.Queries.GetExplanationByQuestionId;
 using ScholarFlow.Modules.Academic.Queries.GetAllSubjects;
 using ScholarFlow.Modules.Academic.Queries.GetPaperDetail;
 using ScholarFlow.Modules.Academic.Queries.GetPaperQuestions;
@@ -255,6 +256,10 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
     }
 
     // ── Explanations ──────────────────────────────────────────────────────────
+
+    [HttpGet("questions/{questionId:guid}/explanation")]
+    public async Task<IActionResult> GetExplanation(Guid questionId, CancellationToken ct)
+        => Ok(await mediator.Send(new GetExplanationByQuestionIdQuery(questionId), ct));
 
     [HttpPost("questions/{questionId:guid}/explanation")]
     [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher},{AppRole.SuperAdmin}")]
