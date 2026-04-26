@@ -13,6 +13,13 @@ public sealed class EfStudentProfileRepository(ApplicationDbContext db)
     public Task<StudentProfile?> GetByUserIdAsync(Guid userId, CancellationToken ct = default)
         => db.StudentProfiles.FirstOrDefaultAsync(p => p.UserId == userId, ct);
 
+    public Task<StudentProfile?> GetByUserIdWithDetailsAsync(Guid userId, CancellationToken ct = default)
+        => db.StudentProfiles
+            .Include(p => p.AcademicStream)
+            .Include(p => p.SubjectSelections)
+                .ThenInclude(ss => ss.Subject)
+            .FirstOrDefaultAsync(p => p.UserId == userId, ct);
+
     public Task<bool> ExistsByUserIdAsync(Guid userId, CancellationToken ct = default)
         => db.StudentProfiles.AnyAsync(p => p.UserId == userId, ct);
 
@@ -21,6 +28,13 @@ public sealed class EfStudentProfileRepository(ApplicationDbContext db)
 
     public void Update(StudentProfile profile)
         => db.StudentProfiles.Update(profile);
+
+    public async Task AddSubjectSelectionAsync(
+        StudentSubjectSelection selection, CancellationToken ct = default)
+        => await db.StudentSubjectSelections.AddAsync(selection, ct);
+
+    public void RemoveSubjectSelections(IEnumerable<StudentSubjectSelection> selections)
+        => db.StudentSubjectSelections.RemoveRange(selections);
 
     public Task SaveChangesAsync(CancellationToken ct = default)
         => db.SaveChangesAsync(ct);
