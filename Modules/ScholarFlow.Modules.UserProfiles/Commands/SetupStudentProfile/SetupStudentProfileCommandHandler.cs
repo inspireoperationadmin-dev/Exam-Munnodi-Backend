@@ -11,20 +11,18 @@ public sealed class SetupStudentProfileCommandHandler(
     ICurrentUser              currentUser)
     : IRequestHandler<SetupStudentProfileCommand>
 {
-    public async Task Handle(SetupStudentProfileCommand request, CancellationToken ct)
+public async Task Handle(SetupStudentProfileCommand request, CancellationToken ct)
+{
+    try
     {
         var profile = await profileRepo.GetByUserIdWithDetailsAsync(currentUser.UserId, ct)
             ?? throw new NotFoundException("Student profile not found.");
 
-        // Remove existing subject selections before adding new ones
         if (profile.SubjectSelections.Count > 0)
             profileRepo.RemoveSubjectSelections(profile.SubjectSelections);
 
-        // Apply stream, medium, exam year
         profile.CompleteSetup(request.StreamId, request.Medium, request.ExamYear);
-        profileRepo.Update(profile);
 
-        // Add new subject selections
         foreach (var subjectId in request.SubjectIds)
         {
             await profileRepo.AddSubjectSelectionAsync(new StudentSubjectSelection
@@ -38,4 +36,10 @@ public sealed class SetupStudentProfileCommandHandler(
 
         await profileRepo.SaveChangesAsync(ct);
     }
+    catch (Exception ex)
+    {
+        // Temporary — remove after diagnosis
+        throw new Exception($"SETUP_HANDLER_EXCEPTION: {ex.GetType().Name}: {ex.Message} | Inner: {ex.InnerException?.Message}", ex);
+    }
+}
 }
