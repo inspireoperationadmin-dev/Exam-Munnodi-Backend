@@ -20,6 +20,7 @@ public sealed class GetStudentProfileSummaryQueryHandler(
         return new StudentProfileSummaryDto(
             FullName:   profile.FullName,
             StreamName: profile.AcademicStream?.Name,
+            Medium:     profile.Medium?.ToString(),
             Subjects:   profile.SubjectSelections
                 .Select(ss => new StudentSubjectDto(ss.SubjectId, ss.Subject.Name))
                 .ToList());
