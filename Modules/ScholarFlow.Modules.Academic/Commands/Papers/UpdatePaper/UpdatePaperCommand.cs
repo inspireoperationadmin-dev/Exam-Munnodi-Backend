@@ -12,4 +12,5 @@ public sealed record UpdatePaperCommand(
     PaperMedium Medium,
     ExamSitting? Sitting,
     decimal NegativeMarkValue,
+    int TimeLimit,
     string? OfficialPaperCode) : IRequest;

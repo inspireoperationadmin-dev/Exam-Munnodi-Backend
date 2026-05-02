@@ -11,5 +11,6 @@ public sealed record CreatePaperCommand(
     int Year,
     ExamSitting? Sitting,
     decimal NegativeMarkValue,
+    int TimeLimit,
     bool IsPublic,
     string? OfficialPaperCode) : IRequest<Guid>;

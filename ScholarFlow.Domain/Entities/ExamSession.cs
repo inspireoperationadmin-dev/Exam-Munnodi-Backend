@@ -62,30 +62,36 @@ public class ExamSession : AggregateRoot
     // ── Domain Methods ────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Score all responses and transition to Completed.
-    /// Requires UserResponses loaded with SelectedOption navigation.
+    /// Score all responses using per-question marks.
+    /// marksPerQuestion: QuestionId → Marks value
     /// </summary>
-    public ExamScore Complete(decimal negativeMarkValue)
+    public ExamScore Complete(
+        decimal negativeMarkValue,
+        IReadOnlyDictionary<Guid, decimal> marksPerQuestion)
     {
         if (Status != ExamSessionStatus.InProgress)
             throw new DomainException("Only in-progress sessions can be completed.");
 
         decimal obtained = 0m;
-        decimal total = _userResponses.Count;
+        decimal total    = 0m;
 
         foreach (var response in _userResponses)
         {
+            var marks = marksPerQuestion.GetValueOrDefault(response.QuestionId, 2m);
+            total += marks;
+
             if (response.SelectedOptionId.HasValue)
             {
                 if (response.SelectedOption!.IsCorrect)
                 {
-                    response.Award(1m, isCorrect: true);
-                    obtained += 1m;
+                    response.Award(marks, isCorrect: true);
+                    obtained += marks;
                 }
                 else
                 {
-                    response.Award(-negativeMarkValue, isCorrect: false);
-                    obtained -= negativeMarkValue;
+                    var deduction = Math.Round(negativeMarkValue * marks, 2);
+                    response.Award(-deduction, isCorrect: false);
+                    obtained -= deduction;
                 }
             }
             else
@@ -96,11 +102,11 @@ public class ExamSession : AggregateRoot
 
         var score = ExamScore.Calculate(Math.Round(obtained, 2), total);
 
-        Status = ExamSessionStatus.Completed;
-        EndTime = DateTime.UtcNow;
-        FinalScore = score.Percentage;
+        Status        = ExamSessionStatus.Completed;
+        EndTime       = DateTime.UtcNow;
+        FinalScore    = score.Percentage;
         ObtainedMarks = score.ObtainedMarks;
-        TotalMarks = score.TotalMarks;
+        TotalMarks    = score.TotalMarks;
 
         Raise(new ExamSessionCompletedDomainEvent(
             Guid.NewGuid(), DateTime.UtcNow,

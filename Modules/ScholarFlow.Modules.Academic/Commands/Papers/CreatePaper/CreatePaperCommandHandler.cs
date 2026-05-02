@@ -37,6 +37,7 @@ public sealed class CreatePaperCommandHandler(
             type:               request.Type,
             medium:             request.Medium,
             isPublic:           isPublic,
+            timeLimit:          request.TimeLimit,
             negativeMarkValue:  request.NegativeMarkValue,
             sitting:            request.Sitting,
             officialPaperCode:  request.OfficialPaperCode,

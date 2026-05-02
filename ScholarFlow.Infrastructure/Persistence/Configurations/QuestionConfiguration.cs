@@ -11,6 +11,10 @@ public class QuestionConfiguration : IEntityTypeConfiguration<Question>
         builder.HasKey(q => q.Id);
         builder.Property(q => q.QuestionText).IsRequired().HasMaxLength(2000);
         builder.Property(q => q.QuestionImageUrl).HasMaxLength(1000);
+        builder.Property(q => q.Marks)
+            .IsRequired()
+            .HasPrecision(5, 2)
+            .HasDefaultValue(2m);                         // ← added
 
         builder.HasOne(q => q.Paper)
             .WithMany(p => p.Questions)

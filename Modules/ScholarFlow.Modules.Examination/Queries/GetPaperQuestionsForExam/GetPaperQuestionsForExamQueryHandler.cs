@@ -19,10 +19,12 @@ public sealed class GetPaperQuestionsForExamQueryHandler(
                 q.Id            AS QuestionId,
                 q.OrderIndex,
                 q.QuestionText,
+                q.Marks,
                 q.QuestionImageUrl,
                 o.Id            AS OptionId,
                 o.Label,
                 o.OptionText,
+                
                 o.OptionImageUrl
             FROM Questions q
             JOIN Options o ON o.QuestionId = q.Id
@@ -32,13 +34,13 @@ public sealed class GetPaperQuestionsForExamQueryHandler(
             """,
             new { request.PaperId });
 
-        var questions = new Dictionary<Guid, (int Order, string Text, string? Image, List<ExamOptionDto> Options)>();
+        var questions = new Dictionary<Guid, (int Order, string Text, string? Image, decimal Marks, List<ExamOptionDto> Options)>();
 
         foreach (var row in rows)
         {
             if (!questions.TryGetValue(row.QuestionId, out var q))
             {
-                q = (row.OrderIndex, row.QuestionText, row.QuestionImageUrl, []);
+                q = (row.OrderIndex, row.QuestionText, row.QuestionImageUrl, row.Marks, []);
                 questions[row.QuestionId] = q;
             }
 
@@ -58,6 +60,7 @@ public sealed class GetPaperQuestionsForExamQueryHandler(
                 OrderIndex:      kv.Value.Order,
                 QuestionText:    kv.Value.Text,
                 QuestionImageUrl: kv.Value.Image,
+                Marks:           kv.Value.Marks,              // ← added
                 Options:         kv.Value.Options))
             .OrderBy(q => q.OrderIndex)
             .ToList();
@@ -71,5 +74,6 @@ public sealed class GetPaperQuestionsForExamQueryHandler(
         Guid OptionId,
         string Label,
         string OptionText,
+        decimal Marks,
         string? OptionImageUrl);
 }

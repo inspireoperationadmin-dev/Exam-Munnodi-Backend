@@ -11,6 +11,7 @@ public sealed record PaperDetailDto(
     string? Sitting,
     decimal NegativeMarkValue,
     bool IsPublic,
+    int TimeLimit,
     string? OfficialPaperCode,
     int QuestionCount,
     Guid? CreatedByTeacherId,

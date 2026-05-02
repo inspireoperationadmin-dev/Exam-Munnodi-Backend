@@ -5,4 +5,5 @@ public sealed record ExamQuestionDto(
     int OrderIndex,
     string QuestionText,
     string? QuestionImageUrl,
+    decimal Marks,
     List<ExamOptionDto> Options);

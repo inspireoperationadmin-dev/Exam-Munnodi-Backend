@@ -37,6 +37,7 @@ public sealed class UpdatePaperCommandHandler(
             medium:            request.Medium,
             sitting:           request.Sitting,
             negativeMarkValue: request.NegativeMarkValue,
+            timeLimit:         request.TimeLimit,
             officialPaperCode: request.OfficialPaperCode);
 
         paperRepo.Update(paper);

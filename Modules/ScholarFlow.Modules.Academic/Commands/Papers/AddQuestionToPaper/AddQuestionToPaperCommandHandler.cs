@@ -30,7 +30,8 @@ public sealed class AddQuestionToPaperCommandHandler(
             questionText:     request.QuestionText,
             orderIndex:       request.OrderIndex,
             questionImageUrl: request.QuestionImageUrl,
-            manualDifficulty: request.ManualDifficulty);
+            manualDifficulty: request.ManualDifficulty,
+            marks:            request.Marks);
 
         await questionRepo.AddAsync(question, ct);
         await questionRepo.SaveChangesAsync(ct);

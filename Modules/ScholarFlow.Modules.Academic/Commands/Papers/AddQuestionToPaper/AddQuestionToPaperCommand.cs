@@ -10,6 +10,7 @@ public sealed record AddQuestionToPaperCommand(
     string? QuestionImageUrl,
     int OrderIndex,
     DifficultyLevel? ManualDifficulty,
+    int Marks,
     List<AddOptionItem> Options) : IRequest<Guid>;
 
 public sealed record AddOptionItem(

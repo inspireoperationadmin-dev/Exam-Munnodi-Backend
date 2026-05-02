@@ -9,19 +9,22 @@ internal sealed class AcademicApi(IApplicationDbContext db) : IAcademicApi
     public Task<bool> PaperExistsAsync(Guid paperId, CancellationToken ct = default)
         => db.Papers.AnyAsync(p => p.Id == paperId, ct);
 
-    public async Task<AcademicPaperSummary?> GetPaperSummaryAsync(Guid paperId, CancellationToken ct = default)
+    public async Task<AcademicPaperSummary?> GetPaperSummaryAsync(
+        Guid paperId, CancellationToken ct = default)
     {
         var paper = await db.Papers.FindAsync([paperId], ct);
         if (paper is null) return null;
 
-        var questionCount = await db.Questions.CountAsync(q => q.PaperId == paperId, ct);
+        var questionCount = await db.Questions
+            .CountAsync(q => q.PaperId == paperId, ct);
 
         return new AcademicPaperSummary(
             paper.Id,
             paper.IsPublic,
             paper.NegativeMarkValue,
             paper.CreatedByTeacherId,
-            questionCount);
+            questionCount,
+            paper.TimeLimit);                              // ← added
     }
 
     public async Task<IReadOnlyList<AcademicQuestionSummary>> GetQuestionsForExamAsync(
@@ -31,11 +34,16 @@ internal sealed class AcademicApi(IApplicationDbContext db) : IAcademicApi
             .Where(q => q.PaperId == paperId)
             .Select(q => new AcademicQuestionSummary(
                 q.Id,
-                db.Options.Where(o => o.QuestionId == q.Id && o.IsCorrect).Select(o => o.Id).First()))
+                db.Options
+                    .Where(o => o.QuestionId == q.Id && o.IsCorrect)
+                    .Select(o => o.Id)
+                    .First(),
+                q.Marks))                                  // ← added
             .ToListAsync(ct);
     }
 
-    public async Task<IReadOnlyList<QuestionPoolItem>> GetQuestionPoolAsync(Guid subjectId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<QuestionPoolItem>> GetQuestionPoolAsync(
+        Guid subjectId, CancellationToken ct = default)
     {
         var items = await db.Questions
             .Where(q => !q.IsDeleted
@@ -52,7 +60,8 @@ internal sealed class AcademicApi(IApplicationDbContext db) : IAcademicApi
         return items.AsReadOnly();
     }
 
-    public async Task UpdateSystemDifficultyAsync(Guid questionId, SystemDifficultyLevel level, CancellationToken ct = default)
+    public async Task UpdateSystemDifficultyAsync(
+        Guid questionId, SystemDifficultyLevel level, CancellationToken ct = default)
     {
         var question = await db.Questions.FindAsync([questionId], ct);
         if (question is null) return;

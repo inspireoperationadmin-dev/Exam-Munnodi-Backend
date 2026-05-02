@@ -3,10 +3,6 @@ using ScholarFlow.Domain.Enums;
 
 namespace ScholarFlow.Domain.Entities;
 
-/// <summary>
-/// A single MCQ question. Sri Lanka A/L format: 5 options (1)(2)(3)(4)(5).
-/// Belongs to a Paper and a SubTopic.
-/// </summary>
 public class Question : AuditableAggregateRoot
 {
     public Guid PaperId { get; private set; }
@@ -14,11 +10,8 @@ public class Question : AuditableAggregateRoot
     public string QuestionText { get; private set; } = string.Empty;
     public string? QuestionImageUrl { get; private set; }
     public int OrderIndex { get; private set; }
-
-    /// <summary>Cognitive nature set manually by Admin/Teacher.</summary>
+    public decimal Marks { get; private set; } = 2m;   // ← added, default 2
     public DifficultyLevel? ManualDifficulty { get; private set; }
-
-    /// <summary>Performance-based difficulty auto-calculated by the system. Requires ≥5 attempts.</summary>
     public SystemDifficultyLevel? SystemDifficulty { get; private set; }
 
     public Paper Paper { get; set; } = null!;
@@ -29,16 +22,22 @@ public class Question : AuditableAggregateRoot
 
     private Question() { }
 
-    public void Update(Guid subTopicId, string questionText, string? questionImageUrl, int orderIndex, DifficultyLevel? manualDifficulty)
+    public void Update(
+        Guid subTopicId,
+        string questionText,
+        string? questionImageUrl,
+        int orderIndex,
+        DifficultyLevel? manualDifficulty,
+        decimal marks)
     {
         SubTopicId       = subTopicId;
         QuestionText     = questionText;
         QuestionImageUrl = questionImageUrl;
         OrderIndex       = orderIndex;
         ManualDifficulty = manualDifficulty;
+        Marks            = marks;
     }
 
-    /// <summary>Called by Analytics module after accumulating enough student attempt data.</summary>
     public void UpdateSystemDifficulty(SystemDifficultyLevel level)
         => SystemDifficulty = level;
 
@@ -47,8 +46,9 @@ public class Question : AuditableAggregateRoot
         Guid subTopicId,
         string questionText,
         int orderIndex,
-        string? questionImageUrl = null,
-        DifficultyLevel? manualDifficulty = null)
+        string? questionImageUrl   = null,
+        DifficultyLevel? manualDifficulty = null,
+        decimal marks              = 2m)
         => new()
         {
             Id               = Guid.NewGuid(),
@@ -57,6 +57,7 @@ public class Question : AuditableAggregateRoot
             QuestionText     = questionText,
             OrderIndex       = orderIndex,
             QuestionImageUrl = questionImageUrl,
-            ManualDifficulty = manualDifficulty
+            ManualDifficulty = manualDifficulty,
+            Marks            = marks,
         };
 }

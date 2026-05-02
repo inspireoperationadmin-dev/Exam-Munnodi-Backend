@@ -14,6 +14,7 @@ public class PaperConfiguration : IEntityTypeConfiguration<Paper>
         builder.Property(p => p.Type).HasConversion<string>().HasMaxLength(30);
         builder.Property(p => p.Medium).HasConversion<string>().HasMaxLength(15);
         builder.Property(p => p.NegativeMarkValue).HasPrecision(4, 2);
+        builder.Property(p => p.TimeLimit).IsRequired();              // ← added
         builder.Property(p => p.Sitting).HasConversion<string>().HasMaxLength(20);
         builder.Property(p => p.OfficialPaperCode).HasMaxLength(30);
 

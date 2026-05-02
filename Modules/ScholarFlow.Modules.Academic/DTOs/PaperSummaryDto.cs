@@ -10,4 +10,5 @@ public sealed record PaperSummaryDto(
     string? Sitting,
     int QuestionCount,
     bool IsPublic,
+    int TimeLimit,
     DateTime CreatedAt);

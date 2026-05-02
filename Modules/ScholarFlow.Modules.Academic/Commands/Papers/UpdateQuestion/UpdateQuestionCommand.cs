@@ -9,4 +9,5 @@ public sealed record UpdateQuestionCommand(
     string QuestionText,
     string? QuestionImageUrl,
     int OrderIndex,
+    int Marks,
     DifficultyLevel? ManualDifficulty) : IRequest;
