@@ -25,6 +25,7 @@ public sealed class GetPaperDetailQueryHandler(ISqlConnectionFactory sql)
                 p.Sitting,
                 p.NegativeMarkValue,
                 p.IsPublic,
+                p.TimeLimit,
                 p.OfficialPaperCode,
                 (SELECT COUNT(*) FROM Questions q WHERE q.PaperId = p.Id AND q.IsDeleted = 0) AS QuestionCount,
                 p.CreatedByTeacherId,

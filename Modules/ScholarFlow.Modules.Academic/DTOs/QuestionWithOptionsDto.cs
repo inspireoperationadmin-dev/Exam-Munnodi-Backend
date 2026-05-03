@@ -8,6 +8,7 @@ public sealed record QuestionWithOptionsDto(
     Guid SubTopicId,
     string SubTopicName,
     bool HasExplanation,
+    decimal Marks,
     IReadOnlyList<OptionDto> Options);
 
 public sealed record OptionDto(

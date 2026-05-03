@@ -29,6 +29,7 @@ public sealed class GetPapersQueryHandler(ISqlConnectionFactory sql)
                 p.Sitting,
                 (SELECT COUNT(*) FROM Questions q WHERE q.PaperId = p.Id AND q.IsDeleted = 0) AS QuestionCount,
                 p.IsPublic,
+                p.TimeLimit,
                 p.CreatedAt
             FROM Papers p
             LEFT JOIN Subjects s ON s.Id = p.SubjectId AND s.IsDeleted = 0
