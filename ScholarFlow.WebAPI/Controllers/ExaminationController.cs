@@ -12,6 +12,7 @@ using ScholarFlow.Modules.Examination.Queries.GetMySessions;
 using ScholarFlow.Modules.Examination.Queries.GetPaperQuestionsForExam;
 using ScholarFlow.Modules.Examination.Queries.GetSessionDetail;
 using ScholarFlow.Modules.Examination.Queries.GetSessionReview;
+using ScholarFlow.Modules.Examination.Queries.HasCompletedTest;
 
 namespace ScholarFlow.WebAPI.Controllers;
 
@@ -39,6 +40,10 @@ public sealed class ExaminationController(IMediator mediator) : ControllerBase
     [HttpPost("sessions/start")]
     public async Task<IActionResult> StartSession([FromBody] StartExamSessionCommand command, CancellationToken ct)
         => Ok(await mediator.Send(command, ct));
+
+    [HttpGet("sessions/has-completed/{paperId:guid}")]
+    public async Task<IActionResult> HasCompletedTest(Guid paperId, CancellationToken ct)
+        => Ok(await mediator.Send(new HasCompletedTestQuery(paperId), ct));
 
     [HttpPost("sessions/generate")]
     public async Task<IActionResult> GeneratePersonalizedExam([FromBody] GeneratePersonalizedExamCommand command, CancellationToken ct)

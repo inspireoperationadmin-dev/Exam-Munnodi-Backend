@@ -11,4 +11,5 @@ public sealed record AvailablePaperDto(
     string? Sitting,
     string? OfficialPaperCode,
     decimal NegativeMarkValue,
-    int QuestionCount);
+    int QuestionCount,
+    int TimeLimit);

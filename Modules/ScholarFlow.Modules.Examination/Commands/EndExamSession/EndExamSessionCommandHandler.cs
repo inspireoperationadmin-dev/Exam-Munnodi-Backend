@@ -36,7 +36,7 @@ public sealed class EndExamSessionCommandHandler(
             q => q.Marks);
 
         // Score using per-question marks — raises ExamSessionCompletedDomainEvent
-        var score = session.Complete(paper.NegativeMarkValue, marksPerQuestion);
+        var score = session.Complete(marksPerQuestion);
 
         await examRepo.SaveChangesAsync(ct);
 

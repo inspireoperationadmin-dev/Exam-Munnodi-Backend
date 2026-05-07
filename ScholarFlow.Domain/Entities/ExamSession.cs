@@ -66,7 +66,6 @@ public class ExamSession : AggregateRoot
     /// marksPerQuestion: QuestionId → Marks value
     /// </summary>
     public ExamScore Complete(
-        decimal negativeMarkValue,
         IReadOnlyDictionary<Guid, decimal> marksPerQuestion)
     {
         if (Status != ExamSessionStatus.InProgress)
@@ -89,9 +88,7 @@ public class ExamSession : AggregateRoot
                 }
                 else
                 {
-                    var deduction = Math.Round(negativeMarkValue * marks, 2);
-                    response.Award(-deduction, isCorrect: false);
-                    obtained -= deduction;
+                    response.Award(0m, isCorrect: false);
                 }
             }
             else

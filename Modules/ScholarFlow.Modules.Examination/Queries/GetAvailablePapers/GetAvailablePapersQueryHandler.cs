@@ -26,6 +26,7 @@ public sealed class GetAvailablePapersQueryHandler(
                 p.Sitting,
                 p.OfficialPaperCode,
                 p.NegativeMarkValue,
+                p.TimeLimit,
                 COUNT(q.Id)     AS QuestionCount
             FROM Papers p
             LEFT JOIN Subjects s    ON s.Id = p.SubjectId AND s.IsDeleted = 0
@@ -45,7 +46,7 @@ public sealed class GetAvailablePapersQueryHandler(
             GROUP BY
                 p.Id, p.Title, p.SubjectId, s.Name,
                 p.Year, p.Type, p.Medium, p.Sitting,
-                p.OfficialPaperCode, p.NegativeMarkValue
+                p.OfficialPaperCode, p.NegativeMarkValue, p.TimeLimit
             ORDER BY p.Year DESC, p.Title
             """,
             new
@@ -68,7 +69,8 @@ public sealed class GetAvailablePapersQueryHandler(
             Sitting:           r.Sitting,
             OfficialPaperCode: r.OfficialPaperCode,
             NegativeMarkValue: r.NegativeMarkValue,
-            QuestionCount:     r.QuestionCount))
+            QuestionCount:     r.QuestionCount,
+            TimeLimit:         r.TimeLimit))
             .ToList();
     }
 
@@ -83,5 +85,6 @@ public sealed class GetAvailablePapersQueryHandler(
         string? Sitting,
         string? OfficialPaperCode,
         decimal NegativeMarkValue,
+        int TimeLimit,
         int QuestionCount);
 }

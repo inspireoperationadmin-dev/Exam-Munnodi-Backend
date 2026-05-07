@@ -16,7 +16,7 @@ internal sealed class AcademicApi(IApplicationDbContext db) : IAcademicApi
         if (paper is null) return null;
 
         var questionCount = await db.Questions
-            .CountAsync(q => q.PaperId == paperId, ct);
+            .CountAsync(q => q.PaperId == paperId && !q.IsDeleted, ct);
 
         return new AcademicPaperSummary(
             paper.Id,
@@ -30,16 +30,20 @@ internal sealed class AcademicApi(IApplicationDbContext db) : IAcademicApi
     public async Task<IReadOnlyList<AcademicQuestionSummary>> GetQuestionsForExamAsync(
         Guid paperId, CancellationToken ct = default)
     {
-        return await db.Questions
-            .Where(q => q.PaperId == paperId)
+        var questions = await db.Questions
+            .Where(q => q.PaperId == paperId && !q.IsDeleted)
             .Select(q => new AcademicQuestionSummary(
                 q.Id,
                 db.Options
                     .Where(o => o.QuestionId == q.Id && o.IsCorrect)
                     .Select(o => o.Id)
-                    .First(),
+                    .FirstOrDefault(),
                 q.Marks))                                  // ← added
             .ToListAsync(ct);
+
+        return questions
+            .Where(q => q.CorrectOptionId != Guid.Empty)
+            .ToList();
     }
 
     public async Task<IReadOnlyList<QuestionPoolItem>> GetQuestionPoolAsync(

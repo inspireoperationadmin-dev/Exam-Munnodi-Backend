@@ -2,7 +2,6 @@ using Dapper;
 using MediatR;
 using ScholarFlow.Domain.Interfaces;
 using ScholarFlow.Modules.Examination.DTOs;
-using ScholarFlow.SharedKernel.Exceptions;
 
 namespace ScholarFlow.Modules.Examination.Queries.GetPaperQuestionsForExam;
 
@@ -27,7 +26,7 @@ public sealed class GetPaperQuestionsForExamQueryHandler(
                 
                 o.OptionImageUrl
             FROM Questions q
-            JOIN Options o ON o.QuestionId = q.Id
+            LEFT JOIN Options o ON o.QuestionId = q.Id
             WHERE q.PaperId   = @PaperId
               AND q.IsDeleted  = 0
             ORDER BY q.OrderIndex, o.Label
@@ -44,15 +43,15 @@ public sealed class GetPaperQuestionsForExamQueryHandler(
                 questions[row.QuestionId] = q;
             }
 
-            q.Options.Add(new ExamOptionDto(
-                Id:             row.OptionId,
-                Label:          row.Label,
-                OptionText:     row.OptionText,
-                OptionImageUrl: row.OptionImageUrl));
+            if (row.OptionId.HasValue)
+            {
+                q.Options.Add(new ExamOptionDto(
+                    Id:             row.OptionId.Value,
+                    Label:          row.Label ?? string.Empty,
+                    OptionText:     row.OptionText ?? string.Empty,
+                    OptionImageUrl: row.OptionImageUrl));
+            }
         }
-
-        if (questions.Count == 0)
-            throw new NotFoundException("Paper not found or has no questions.");
 
         return questions
             .Select(kv => new ExamQuestionDto(
@@ -66,14 +65,16 @@ public sealed class GetPaperQuestionsForExamQueryHandler(
             .ToList();
     }
 
-    private sealed record QuestionRow(
-        Guid QuestionId,
-        int OrderIndex,
-        string QuestionText,
-        string? QuestionImageUrl,
-        Guid OptionId,
-        string Label,
-        string OptionText,
-        decimal Marks,
-        string? OptionImageUrl);
+    private sealed class QuestionRow
+    {
+        public Guid QuestionId { get; set; }
+        public int OrderIndex { get; set; }
+        public string QuestionText { get; set; } = string.Empty;
+        public decimal Marks { get; set; }
+        public string? QuestionImageUrl { get; set; }
+        public Guid? OptionId { get; set; }
+        public string? Label { get; set; }
+        public string? OptionText { get; set; }
+        public string? OptionImageUrl { get; set; }
+    }
 }
