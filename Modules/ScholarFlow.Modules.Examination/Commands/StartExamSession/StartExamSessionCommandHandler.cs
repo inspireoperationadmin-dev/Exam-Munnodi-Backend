@@ -56,7 +56,7 @@ public sealed class StartExamSessionCommandHandler(
         var session = ExamSession.Start(
             userId:       currentUser.UserId,
             paperId:      request.PaperId,
-            subjectId:    null,
+            subjectId:    paper.SubjectId,
             isPractice:   request.IsPractice);
 
         await examRepo.AddAsync(session, ct);

@@ -17,7 +17,9 @@ public sealed class AddQuestionToPaperCommandValidator : AbstractValidator<AddQu
         RuleForEach(x => x.Options).ChildRules(opt =>
         {
             opt.RuleFor(o => o.Label).NotEmpty().MaximumLength(5);
-            opt.RuleFor(o => o.OptionText).NotEmpty().MaximumLength(1000);
+            opt.RuleFor(o => o.OptionText).MaximumLength(1000);
+            opt.RuleFor(o => o).Must(o => !string.IsNullOrWhiteSpace(o.OptionText) || !string.IsNullOrWhiteSpace(o.OptionImageUrl))
+               .WithMessage("Each option must have either text or an image URL.");
         });
     }
 }

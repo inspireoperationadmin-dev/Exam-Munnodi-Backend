@@ -15,6 +15,6 @@ public sealed record AddQuestionToPaperCommand(
 
 public sealed record AddOptionItem(
     string Label,
-    string OptionText,
+    string? OptionText,
     string? OptionImageUrl,
     bool IsCorrect);

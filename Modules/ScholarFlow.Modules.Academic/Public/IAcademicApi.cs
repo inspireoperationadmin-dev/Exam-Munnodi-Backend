@@ -17,7 +17,8 @@ public sealed record AcademicPaperSummary(
     decimal  NegativeMarkValue,
     Guid?    CreatedByTeacherId,
     int      QuestionCount,
-    int      TimeLimit);               // ← added
+    int      TimeLimit,
+    Guid?    SubjectId);               // subject the paper belongs to
 
 public sealed record AcademicQuestionSummary(
     Guid     QuestionId,

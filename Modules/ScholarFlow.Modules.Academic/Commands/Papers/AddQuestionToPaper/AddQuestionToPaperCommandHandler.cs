@@ -43,7 +43,7 @@ public sealed class AddQuestionToPaperCommandHandler(
                 Id             = Guid.NewGuid(),
                 QuestionId     = question.Id,
                 Label          = opt.Label,
-                OptionText     = opt.OptionText,
+                OptionText     = opt.OptionText ?? string.Empty,
                 OptionImageUrl = opt.OptionImageUrl,
                 IsCorrect      = opt.IsCorrect
             };

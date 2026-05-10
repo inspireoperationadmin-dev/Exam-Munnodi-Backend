@@ -24,7 +24,8 @@ internal sealed class AcademicApi(IApplicationDbContext db) : IAcademicApi
             paper.NegativeMarkValue,
             paper.CreatedByTeacherId,
             questionCount,
-            paper.TimeLimit);                              // ← added
+            paper.TimeLimit,
+            paper.SubjectId);
     }
 
     public async Task<IReadOnlyList<AcademicQuestionSummary>> GetQuestionsForExamAsync(

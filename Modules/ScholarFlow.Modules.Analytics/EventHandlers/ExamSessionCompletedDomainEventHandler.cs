@@ -92,9 +92,14 @@ public sealed class ExamSessionCompletedDomainEventHandler(
         }
 
         // 3. Update StudentSubjectPerformance
-        if (notification.SubjectId.HasValue)
+        // Fallback: derive SubjectId from question responses when it's missing on the session
+        // (covers sessions created before the StartExamSession SubjectId fix)
+        var effectiveSubjectId = notification.SubjectId
+            ?? (responses.Count > 0 ? responses[0].SubjectId : (Guid?)null);
+
+        if (effectiveSubjectId.HasValue)
         {
-            var subjectId    = notification.SubjectId.Value;
+            var subjectId    = effectiveSubjectId.Value;
             var totalQ       = responses.Count;
             var correctQ     = responses.Count(r => r.IsCorrect);
             var examScore    = notification.Score.Percentage;
