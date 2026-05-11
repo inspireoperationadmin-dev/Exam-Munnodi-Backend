@@ -45,6 +45,11 @@ public static class DependencyInjection
         services.Configure<JwtSettings>(configuration.GetSection("JwtSettings"));
         services.AddScoped<ITokenService, TokenService>();
 
+        // ── Email (Gmail SMTP) ────────────────────────────────────────────────
+        services.Configure<SmtpSettings>(configuration.GetSection("Smtp"));
+        services.AddScoped<IEmailService, SmtpEmailService>();
+        services.AddHostedService<OtpCleanupService>();
+
         // ── Current user (reads JWT claims from HttpContext) ──────────────────
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();

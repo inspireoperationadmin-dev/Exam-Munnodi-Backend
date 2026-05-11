@@ -1,6 +1,8 @@
 using MediatR;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using ScholarFlow.Domain.Entities;
+using ScholarFlow.Infrastructure.Persistence;
 using ScholarFlow.Infrastructure.Services;
 using ScholarFlow.Modules.Identity.DTOs;
 using ScholarFlow.SharedKernel.Exceptions;
@@ -11,21 +13,32 @@ namespace ScholarFlow.Modules.Identity.Commands.Register;
 public sealed class RegisterCommandHandler(
     UserManager<ApplicationUser> userManager,
     IPublisher                   publisher,
-    ITokenService                tokenService)
+    ITokenService                tokenService,
+    ApplicationDbContext         db)
     : IRequestHandler<RegisterCommand, AuthResponse>
 {
     public async Task<AuthResponse> Handle(RegisterCommand request, CancellationToken ct)
     {
-        // ── 1. Duplicate email check ──────────────────────────────────────────
-        if (await userManager.FindByEmailAsync(request.Email) is not null)
+        var email = request.Email.Trim().ToLowerInvariant();
+
+        // ── 1. Ensure email was OTP-verified ──────────────────────────────────
+        var verifiedOtp = await db.OtpCodes
+            .Where(o => o.Email == email && o.IsVerified && o.ExpiresAt > DateTime.UtcNow)
+            .FirstOrDefaultAsync(ct);
+
+        if (verifiedOtp is null)
+            throw new BadRequestException("Please verify your email address before registering.");
+
+        // ── 2. Duplicate email check ──────────────────────────────────────────
+        if (await userManager.FindByEmailAsync(email) is not null)
             throw new ConflictException("An account with this email already exists.");
 
-        // ── 2. Create Identity user ───────────────────────────────────────────
+        // ── 3. Create Identity user ───────────────────────────────────────────
         var user = new ApplicationUser
         {
             Id       = Guid.NewGuid(),
-            UserName = request.Email,
-            Email    = request.Email
+            UserName = email,
+            Email    = email
         };
 
         var createResult = await userManager.CreateAsync(user, request.Password);
@@ -43,7 +56,10 @@ public sealed class RegisterCommandHandler(
                 [..roleResult.Errors.Select(e => e.Description)]);
         }
 
-        // ── 3. Notify UserProfiles module to create the domain profile ────────
+        // ── 4. Consume the verified OTP (delete it so it can't be reused) ─────
+        db.OtpCodes.Remove(verifiedOtp);
+
+        // ── 5. Notify UserProfiles module to create the domain profile ────────
         // TeacherCode generation is intentionally omitted here —
         // that is a UserProfiles module concern handled in the event handler.
         await publisher.Publish(new UserRegisteredIntegrationEvent(
@@ -58,7 +74,9 @@ public sealed class RegisterCommandHandler(
             Qualification: request.Qualification,
             Bio:           request.Bio), ct);
 
-        // ── 4. Issue JWT ──────────────────────────────────────────────────────
+        await db.SaveChangesAsync(ct);
+
+        // ── 6. Issue JWT ──────────────────────────────────────────────────────
         return new AuthResponse(
             AccessToken: tokenService.GenerateToken(user.Id, user.Email!, request.Role),
             ExpiresAt:   tokenService.TokenExpiresAt(),

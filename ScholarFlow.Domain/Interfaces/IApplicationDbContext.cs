@@ -38,5 +38,8 @@ public interface IApplicationDbContext
     DbSet<StudentSubjectPerformance> StudentSubjectPerformances { get; }
     DbSet<StudentQuestionHistory> StudentQuestionHistories { get; }
 
+    // Auth
+    DbSet<OtpCode> OtpCodes { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
