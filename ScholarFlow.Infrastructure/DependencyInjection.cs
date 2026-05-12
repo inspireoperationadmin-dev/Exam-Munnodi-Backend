@@ -45,9 +45,13 @@ public static class DependencyInjection
         services.Configure<JwtSettings>(configuration.GetSection("JwtSettings"));
         services.AddScoped<ITokenService, TokenService>();
 
-        // ── Email (Gmail SMTP) ────────────────────────────────────────────────
-        services.Configure<SmtpSettings>(configuration.GetSection("Smtp"));
-        services.AddScoped<IEmailService, SmtpEmailService>();
+        // ── Email (Resend) ────────────────────────────────────────────────────
+        services.Configure<ResendSettings>(configuration.GetSection("Resend"));
+        services.AddHttpClient("Resend", client =>
+        {
+            client.BaseAddress = new Uri("https://api.resend.com/");
+        });
+        services.AddScoped<IEmailService, ResendEmailService>();
         services.AddHostedService<OtpCleanupService>();
 
         // ── Current user (reads JWT claims from HttpContext) ──────────────────
