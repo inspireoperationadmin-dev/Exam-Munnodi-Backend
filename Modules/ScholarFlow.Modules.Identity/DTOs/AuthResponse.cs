@@ -1,8 +1,12 @@
 namespace ScholarFlow.Modules.Identity.DTOs;
 
 public sealed record AuthResponse(
-    string AccessToken,
+    string   AccessToken,
     DateTime ExpiresAt,
-    Guid UserId,
-    string Email,
-    string Role);
+    Guid     UserId,
+    string   Email,
+    string   Role,
+
+    bool     IsEmailVerified,
+    bool     IsProfileSetup
+);

@@ -32,6 +32,8 @@ public sealed class SendOtpCommandHandler(
             throw new TooManyRequestsException(
                 "Too many OTP requests. Please wait before requesting a new code.");
 
+        
+
         // ── 2. Generate a cryptographically random 6-digit code ───────────────
         var code     = RandomNumberGenerator.GetInt32(100_000, 999_999).ToString();
         var codeHash = HashCode(code);

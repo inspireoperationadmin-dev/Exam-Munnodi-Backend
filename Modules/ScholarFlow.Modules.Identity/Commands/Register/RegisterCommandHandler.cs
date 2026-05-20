@@ -1,9 +1,8 @@
 using MediatR;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using ScholarFlow.Domain.Entities;
-using ScholarFlow.Infrastructure.Persistence;
 using ScholarFlow.Infrastructure.Services;
+using ScholarFlow.Modules.Identity.Commands.SendOtp;
 using ScholarFlow.Modules.Identity.DTOs;
 using ScholarFlow.SharedKernel.Exceptions;
 using ScholarFlow.SharedKernel.IntegrationEvents;
@@ -12,33 +11,25 @@ namespace ScholarFlow.Modules.Identity.Commands.Register;
 
 public sealed class RegisterCommandHandler(
     UserManager<ApplicationUser> userManager,
-    IPublisher                   publisher,
-    ITokenService                tokenService,
-    ApplicationDbContext         db)
+    IMediator                   mediator,
+    ITokenService                tokenService)
     : IRequestHandler<RegisterCommand, AuthResponse>
 {
     public async Task<AuthResponse> Handle(RegisterCommand request, CancellationToken ct)
     {
         var email = request.Email.Trim().ToLowerInvariant();
 
-        // ── 1. Ensure email was OTP-verified ──────────────────────────────────
-        var verifiedOtp = await db.OtpCodes
-            .Where(o => o.Email == email && o.IsVerified && o.ExpiresAt > DateTime.UtcNow)
-            .FirstOrDefaultAsync(ct);
-
-        if (verifiedOtp is null)
-            throw new BadRequestException("Please verify your email address before registering.");
-
-        // ── 2. Duplicate email check ──────────────────────────────────────────
+        // ── 1. Duplicate email check ──────────────────────────────────────────
         if (await userManager.FindByEmailAsync(email) is not null)
             throw new ConflictException("An account with this email already exists.");
 
-        // ── 3. Create Identity user ───────────────────────────────────────────
+        // ── 2. Create Identity user with EmailConfirmed = false ───────────────
         var user = new ApplicationUser
         {
-            Id       = Guid.NewGuid(),
-            UserName = email,
-            Email    = email
+            Id             = Guid.NewGuid(),
+            UserName       = email,
+            Email          = email,
+            EmailConfirmed = false   // enforced — cannot log in or access app until verified
         };
 
         var createResult = await userManager.CreateAsync(user, request.Password);
@@ -56,13 +47,8 @@ public sealed class RegisterCommandHandler(
                 [..roleResult.Errors.Select(e => e.Description)]);
         }
 
-        // ── 4. Consume the verified OTP (delete it so it can't be reused) ─────
-        db.OtpCodes.Remove(verifiedOtp);
-
-        // ── 5. Notify UserProfiles module to create the domain profile ────────
-        // TeacherCode generation is intentionally omitted here —
-        // that is a UserProfiles module concern handled in the event handler.
-        await publisher.Publish(new UserRegisteredIntegrationEvent(
+        // ── 3. Notify UserProfiles module to create domain profile shell ──────
+        await mediator.Publish(new UserRegisteredIntegrationEvent(
             EventId:       Guid.NewGuid(),
             OccurredOn:    DateTime.UtcNow,
             UserId:        user.Id,
@@ -74,14 +60,18 @@ public sealed class RegisterCommandHandler(
             Qualification: request.Qualification,
             Bio:           request.Bio), ct);
 
-        await db.SaveChangesAsync(ct);
+        // ── 4. Trigger OTP send (same handler reused — rate limit applies) ────
+        await mediator.Send(new SendOtpCommand(email), ct);
 
-        // ── 6. Issue JWT ──────────────────────────────────────────────────────
+        // ── 5. Issue JWT — IsEmailVerified=false tells frontend to go to OTP page
+        //       Token is valid but all protected routes enforce EmailConfirmed below.
         return new AuthResponse(
-            AccessToken: tokenService.GenerateToken(user.Id, user.Email!, request.Role),
-            ExpiresAt:   tokenService.TokenExpiresAt(),
-            UserId:      user.Id,
-            Email:       user.Email!,
-            Role:        request.Role);
+            AccessToken:     tokenService.GenerateToken(user.Id, user.Email!, request.Role),
+            ExpiresAt:       tokenService.TokenExpiresAt(),
+            UserId:          user.Id,
+            Email:           user.Email!,
+            Role:            request.Role,
+            IsEmailVerified: false,
+            IsProfileSetup:  false);
     }
 }

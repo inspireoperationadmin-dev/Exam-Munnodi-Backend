@@ -26,14 +26,14 @@ public sealed class AuthController(IMediator mediator) : ControllerBase
         [FromBody] SendOtpCommand command, CancellationToken ct)
     {
         await mediator.Send(command, ct);
-        return Ok();
+        return Ok(new { message = "OTP sent successfully." });
     }
 
     [HttpPost("otp/verify")]
     public async Task<IActionResult> VerifyOtp(
         [FromBody] VerifyOtpCommand command, CancellationToken ct)
     {
-        await mediator.Send(command, ct);
-        return Ok();
+        var result = await mediator.Send(command, ct); // returns AuthResponse
+        return Ok(result);
     }
 }

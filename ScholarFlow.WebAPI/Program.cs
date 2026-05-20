@@ -123,6 +123,8 @@ app.UseHttpsRedirection();
 app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<OnboardingEnforcementMiddleware>();
 app.MapControllers();
+
 
 app.Run();

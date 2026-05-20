@@ -17,9 +17,13 @@ public sealed class OtpCode
         Email      = email.ToLowerInvariant(),
         CodeHash   = codeHash,
         CreatedAt  = DateTime.UtcNow,
-        ExpiresAt  = DateTime.UtcNow.AddMinutes(5),
+        ExpiresAt  = DateTime.UtcNow.AddMinutes(10), // 10 min window to enter the code
         IsVerified = false,
     };
-
-    public void MarkVerified() => IsVerified = true;
+    
+    public void MarkVerified()
+    {
+        IsVerified = true;
+        ExpiresAt  = DateTime.UtcNow.AddMinutes(15); // grace window for next step
+    }
 }
