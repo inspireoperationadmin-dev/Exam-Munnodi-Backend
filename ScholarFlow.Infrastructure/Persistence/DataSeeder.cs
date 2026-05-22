@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ScholarFlow.Domain.Entities;
 using ScholarFlow.Domain.Enums;
@@ -14,6 +15,11 @@ public static class DataSeeder
     public static async Task SeedAsync(IServiceProvider serviceProvider)
     {
         using var scope = serviceProvider.CreateScope();
+
+        // ── Run migrations first ──────────────────────────────────────────────
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        await db.Database.MigrateAsync();
+
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
@@ -50,13 +56,13 @@ public static class DataSeeder
 
         var superAdmin = new ApplicationUser
         {
-            Id            = Guid.Parse("44444444-0000-0000-0000-000000000001"),
-            UserName      = email,
+            Id                 = Guid.Parse("44444444-0000-0000-0000-000000000001"),
+            UserName           = email,
             NormalizedUserName = email.ToUpperInvariant(),
-            Email         = email,
+            Email              = email,
             NormalizedEmail    = email.ToUpperInvariant(),
-            EmailConfirmed = true,
-            SecurityStamp  = Guid.NewGuid().ToString()
+            EmailConfirmed     = true,
+            SecurityStamp      = Guid.NewGuid().ToString()
         };
 
         var createResult = await userManager.CreateAsync(superAdmin, password);

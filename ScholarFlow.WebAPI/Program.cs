@@ -15,6 +15,13 @@ using ScholarFlow.WebAPI.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ── Validate required secrets at startup ──────────────────────────────────────
+var jwtSecret = builder.Configuration["JwtSettings:Secret"]
+    ?? throw new InvalidOperationException("JwtSettings:Secret is not configured.");
+
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not configured.");
+
 // ── Infrastructure (DbContext, Identity, TokenService) ────────────────────────
 builder.Services.AddInfrastructure(builder.Configuration);
 
@@ -56,7 +63,7 @@ builder.Services
             ValidIssuer              = builder.Configuration["JwtSettings:Issuer"],
             ValidAudience            = builder.Configuration["JwtSettings:Audience"],
             IssuerSigningKey         = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:Secret"]!))
+                                            Encoding.UTF8.GetBytes(jwtSecret))
         };
     });
 
