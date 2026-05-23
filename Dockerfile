@@ -1,8 +1,7 @@
 # Build stage
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Copy solution and project files
 COPY ScholarFlow.slnx ./
 COPY ScholarFlow.Domain/ScholarFlow.Domain.csproj ScholarFlow.Domain/
 COPY ScholarFlow.Infrastructure/ScholarFlow.Infrastructure.csproj ScholarFlow.Infrastructure/
@@ -14,26 +13,21 @@ COPY Modules/ScholarFlow.Modules.Examination/ScholarFlow.Modules.Examination.csp
 COPY Modules/ScholarFlow.Modules.Identity/ScholarFlow.Modules.Identity.csproj Modules/ScholarFlow.Modules.Identity/
 COPY Modules/ScholarFlow.Modules.UserProfiles/ScholarFlow.Modules.UserProfiles.csproj Modules/ScholarFlow.Modules.UserProfiles/
 
-# Restore dependencies
 RUN dotnet restore ScholarFlow.WebAPI/ScholarFlow.WebAPI.csproj
 
-# Copy everything else
 COPY . .
 
-# Build and publish
 RUN dotnet publish ScholarFlow.WebAPI/ScholarFlow.WebAPI.csproj \
     -c Release \
     -o /app/publish \
     --no-restore
 
 # Runtime stage
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
-# Copy published files
 COPY --from=build /app/publish .
 
-# Railway uses PORT environment variable
 ENV ASPNETCORE_URLS=http://+:${PORT:-8080}
 
 EXPOSE 8080
