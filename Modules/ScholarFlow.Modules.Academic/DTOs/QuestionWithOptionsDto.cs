@@ -1,3 +1,5 @@
+using ScholarFlow.Domain.Enums;
+
 namespace ScholarFlow.Modules.Academic.DTOs;
 
 public sealed record QuestionWithOptionsDto(
@@ -9,6 +11,7 @@ public sealed record QuestionWithOptionsDto(
     string SubTopicName,
     bool HasExplanation,
     decimal Marks,
+    DifficultyLevel? ManualDifficulty, 
     IReadOnlyList<OptionDto> Options);
 
 public sealed record OptionDto(

@@ -1,5 +1,6 @@
 using Dapper;
 using MediatR;
+using ScholarFlow.Domain.Enums;
 using ScholarFlow.Domain.Interfaces;
 using ScholarFlow.Modules.Academic.DTOs;
 
@@ -22,6 +23,7 @@ public sealed class GetPaperQuestionsQueryHandler(ISqlConnectionFactory sql)
                 st.SubTopicName,
                 CAST(CASE WHEN e.Id IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS HasExplanation,
                 q.Marks,
+                q.ManualDifficulty,
                 o.Id             AS OptionId,
                 o.Label,
                 o.OptionText,
@@ -57,6 +59,7 @@ public sealed class GetPaperQuestionsQueryHandler(ISqlConnectionFactory sql)
                 entry.Q.SubTopicName,
                 entry.Q.HasExplanation,
                 entry.Q.Marks,
+                entry.Q.ManualDifficulty,
                 entry.Opts))
             .ToList();
     }
@@ -64,5 +67,6 @@ public sealed class GetPaperQuestionsQueryHandler(ISqlConnectionFactory sql)
     private sealed record QuestionRow(
         Guid QuestionId, int OrderIndex, string QuestionText, string? QuestionImageUrl,
         Guid SubTopicId, string SubTopicName, bool HasExplanation, decimal Marks,
+        DifficultyLevel? ManualDifficulty,
         Guid? OptionId, string? Label, string? OptionText, string? OptionImageUrl, bool IsCorrect);
 }
