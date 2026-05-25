@@ -15,6 +15,8 @@ COPY Modules/ScholarFlow.Modules.UserProfiles/ScholarFlow.Modules.UserProfiles.c
 
 RUN dotnet restore ScholarFlow.WebAPI/ScholarFlow.WebAPI.csproj
 
+ARG BUILD_VERSION=1
+
 COPY . .
 
 RUN dotnet publish ScholarFlow.WebAPI/ScholarFlow.WebAPI.csproj \
@@ -27,6 +29,8 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
 COPY --from=build /app/publish .
+
+ARG PORT=8080
 
 ENV ASPNETCORE_URLS=http://+:${PORT:-8080}
 
