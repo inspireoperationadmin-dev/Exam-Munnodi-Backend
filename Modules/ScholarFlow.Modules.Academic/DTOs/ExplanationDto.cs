@@ -11,4 +11,5 @@ public sealed record ExplanationDto(
     Guid                              QuestionId,
     string                            Type,
     string?                           VideoUrl,
+    Guid?                                CorrectOptionId,
     IReadOnlyList<ExplanationSectionDto> Sections);

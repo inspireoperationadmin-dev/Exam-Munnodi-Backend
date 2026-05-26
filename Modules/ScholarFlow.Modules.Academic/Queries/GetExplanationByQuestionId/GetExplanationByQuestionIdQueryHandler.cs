@@ -18,11 +18,13 @@ public sealed class GetExplanationByQuestionIdQueryHandler(ISqlConnectionFactory
                 e.QuestionId,
                 e.Type,
                 e.VideoUrl,
+                o.Id          AS CorrectOptionId,
                 es.Id         AS SectionId,
                 es.Title,
                 es.Content,
                 es.OrderIndex
             FROM Explanations e
+            LEFT JOIN Options o ON o.QuestionId = e.QuestionId AND o.IsCorrect = CAST(1 AS BIT)
             LEFT JOIN ExplanationSections es ON es.ExplanationId = e.Id
             WHERE e.QuestionId = @QuestionId
             ORDER BY es.OrderIndex
@@ -46,6 +48,7 @@ public sealed class GetExplanationByQuestionIdQueryHandler(ISqlConnectionFactory
             first.QuestionId,
             first.Type,
             first.VideoUrl,
+            first.CorrectOptionId,
             sections);
     }
 
@@ -54,6 +57,7 @@ public sealed class GetExplanationByQuestionIdQueryHandler(ISqlConnectionFactory
         Guid    QuestionId,
         string  Type,
         string? VideoUrl,
+        Guid?   CorrectOptionId,   // ← add
         Guid?   SectionId,
         string? Title,
         string? Content,
