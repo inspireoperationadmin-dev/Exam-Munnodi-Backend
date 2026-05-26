@@ -33,6 +33,7 @@ internal sealed class AcademicApi(IApplicationDbContext db) : IAcademicApi
     {
         var questions = await db.Questions
             .Where(q => q.PaperId == paperId && !q.IsDeleted)
+            .OrderBy(q => q.OrderIndex) 
             .Select(q => new AcademicQuestionSummary(
                 q.Id,
                 db.Options
