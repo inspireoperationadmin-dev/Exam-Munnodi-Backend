@@ -16,6 +16,7 @@ public class UserResponse
     public decimal MarksAwarded { get; private set; }
     public ResponseStatus ResponseStatus { get; set; }
     public int TimeSpentSeconds { get; set; }
+    public int OrderIndex { get; set; } // <-- Added to store question sequence natively [1]
 
     public ExamSession Session { get; set; } = null!;
     public Question Question { get; set; } = null!;

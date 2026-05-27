@@ -10,6 +10,11 @@ public class UserResponseConfiguration : IEntityTypeConfiguration<UserResponse>
     {
         builder.HasKey(ur => ur.Id);
 
+        // Map the new OrderIndex property as required with a default value of 0 [1]
+        builder.Property(ur => ur.OrderIndex)
+            .IsRequired()
+            .HasDefaultValue(0);
+
         builder.Property(ur => ur.ResponseStatus).HasConversion<string>().HasMaxLength(15);
         builder.Property(ur => ur.MarksAwarded).HasPrecision(6, 2);
 

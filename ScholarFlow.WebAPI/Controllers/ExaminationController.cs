@@ -69,9 +69,13 @@ public sealed class ExaminationController(IMediator mediator) : ControllerBase
         return Ok();
     }
 
+    // Updated: Accept the list of answers in the request body [1]
     [HttpPost("sessions/{id:guid}/end")]
-    public async Task<IActionResult> EndSession(Guid id, CancellationToken ct)
-        => Ok(await mediator.Send(new EndExamSessionCommand(id), ct));
+    public async Task<IActionResult> EndSession(
+        Guid id, 
+        [FromBody] EndExamSessionRequest request, 
+        CancellationToken ct)
+        => Ok(await mediator.Send(new EndExamSessionCommand(id, request.Answers), ct));
 
     // ── History & Results ─────────────────────────────────────────────────────
 
@@ -101,3 +105,6 @@ public sealed record SubmitAnswerRequest(
 public sealed record FlagQuestionRequest(
     Guid QuestionId,
     bool Flagged);
+
+// New: Wrap the bulk answers list into a request record [1]
+public sealed record EndExamSessionRequest(List<SubmittedAnswerDto> Answers);

@@ -31,10 +31,10 @@ public sealed class GetSessionReviewQueryHandler(
         if (sessionCheck.Status != nameof(ExamSessionStatus.Completed))
             throw new BadRequestException("Review is only available after the session is completed.");
 
-        // Load all review data in one query
+        // Load all review data in one query directly using UserResponses [1]
         var rows = await conn.QueryAsync<ReviewRow>("""
             SELECT
-                esq.OrderIndex,
+                ur.OrderIndex,
                 q.Id            AS QuestionId,
                 q.QuestionText,
                 q.QuestionImageUrl,
@@ -52,15 +52,14 @@ public sealed class GetSessionReviewQueryHandler(
                 es2.Title       AS SectionTitle,
                 es2.Content     AS SectionContent,
                 es2.OrderIndex  AS SectionOrder
-            FROM ExamSessionQuestions esq
-            JOIN Questions q            ON q.Id  = esq.QuestionId
-            JOIN UserResponses ur       ON ur.SessionId = esq.SessionId AND ur.QuestionId = q.Id
+            FROM UserResponses ur
+            JOIN Questions q            ON q.Id  = ur.QuestionId
             JOIN Options o              ON o.QuestionId = q.Id
             LEFT JOIN Explanations e    ON e.QuestionId = q.Id
             LEFT JOIN ExplanationSections es2 ON es2.ExplanationId = e.Id
-            WHERE esq.SessionId = @SessionId
+            WHERE ur.SessionId = @SessionId
               AND q.IsDeleted   = 0
-            ORDER BY esq.OrderIndex, o.Label, es2.OrderIndex
+            ORDER BY ur.OrderIndex, o.Label, es2.OrderIndex
             """,
             new { request.SessionId });
 
