@@ -1,3 +1,4 @@
+using Dapper;
 using MediatR;
 using ScholarFlow.Domain.Entities;
 using ScholarFlow.Domain.Enums;
@@ -12,9 +13,11 @@ namespace ScholarFlow.Modules.Examination.Commands.StartExamSession;
 
 public sealed class StartExamSessionCommandHandler(
     IExamSessionRepository examRepo,
-    IAcademicApi academicApi,
-    IUserProfilesApi userProfilesApi,
-    ICurrentUser currentUser)
+    IAcademicApi           academicApi,
+    IUserProfilesApi       userProfilesApi,
+    IExplanationRepository explanationRepo,
+    ISqlConnectionFactory  sql,             // <-- Injected for high-performance Dapper query [1]
+    ICurrentUser           currentUser)
     : IRequestHandler<StartExamSessionCommand, StartSessionResultDto>
 {
     public async Task<StartSessionResultDto> Handle(StartExamSessionCommand request, CancellationToken ct)
@@ -46,10 +49,10 @@ public sealed class StartExamSessionCommandHandler(
                 throw new ConflictException("You have already completed this paper in exam mode.");
         }
 
-        // 4. Load all questions via Academic module public API
-        var questions = await academicApi.GetQuestionsForExamAsync(request.PaperId, ct);
+        // 4. Load all questions summary via Academic module public API (stores CorrectOptionId and Marks) [1]
+        var questionsSummary = await academicApi.GetQuestionsForExamAsync(request.PaperId, ct);
 
-        if (questions.Count == 0)
+        if (questionsSummary.Count == 0)
             throw new BadRequestException("This paper has no questions.");
 
         // 5. Create session
@@ -61,16 +64,17 @@ public sealed class StartExamSessionCommandHandler(
 
         await examRepo.AddAsync(session, ct);
 
-        // 6. Create UserResponse + ExamSessionQuestion for each question
-        for (int i = 0; i < questions.Count; i++)
+        // 6. Create UserResponse + ExamSessionQuestion for each question [1]
+        for (int i = 0; i < questionsSummary.Count; i++)
         {
-            var q = questions[i];
+            var q = questionsSummary[i];
 
             await examRepo.AddResponseAsync(new UserResponse
             {
                 Id             = Guid.NewGuid(),
                 SessionId      = session.Id,
                 QuestionId     = q.QuestionId,
+                OrderIndex     = i + 1, // Store layout index natively inside response [1]
                 ResponseStatus = ResponseStatus.Unvisited
             }, ct);
 
@@ -85,10 +89,118 @@ public sealed class StartExamSessionCommandHandler(
 
         await examRepo.SaveChangesAsync(ct);
 
+        // 7. Fetch the detailed question texts and option details using Dapper [1]
+        using var conn = sql.CreateConnection();
+
+        var rows = await conn.QueryAsync<QuestionRow>("""
+            SELECT
+                q.Id            AS QuestionId,
+                q.OrderIndex,
+                q.QuestionText,
+                q.Marks,
+                q.QuestionImageUrl,
+                o.Id            AS OptionId,
+                o.Label,
+                o.OptionText,
+                o.OptionImageUrl
+            FROM Questions q
+            LEFT JOIN Options o ON o.QuestionId = q.Id
+            WHERE q.PaperId   = @PaperId
+              AND q.IsDeleted  = 0
+            ORDER BY q.OrderIndex, o.Label
+            """,
+            new { PaperId = request.PaperId });
+
+        var questionsDict = new Dictionary<Guid, (int Order, string Text, string? Image, decimal Marks, List<ExamOptionDto> Options)>();
+
+        foreach (var row in rows)
+        {
+            if (!questionsDict.TryGetValue(row.QuestionId, out var q))
+            {
+                q = (row.OrderIndex, row.QuestionText, row.QuestionImageUrl, row.Marks, []);
+                questionsDict[row.QuestionId] = q;
+            }
+
+            if (row.OptionId.HasValue)
+            {
+                q.Options.Add(new ExamOptionDto(
+                    Id:             row.OptionId.Value,
+                    Label:          row.Label ?? string.Empty,
+                    OptionText:     row.OptionText ?? string.Empty,
+                    OptionImageUrl: row.OptionImageUrl));
+            }
+        }
+
+        // 8. If Practice Mode, retrieve all explanation sections in a single bulk query [1]
+        var explanationsMap = new Dictionary<Guid, Explanation>();
+        var summaryLookup = questionsSummary.ToDictionary(q => q.QuestionId);
+
+        if (request.IsPractice)
+        {
+            var questionIds = questionsSummary.Select(q => q.QuestionId).ToList();
+            var explanationsList = await explanationRepo.GetByQuestionIdsAsync(questionIds, ct);
+            explanationsMap = explanationsList.ToDictionary(e => e.QuestionId);
+        }
+
+        // 9. Map final DTO array with security conditional checks [1]
+        var examQuestions = questionsDict.Select(kv =>
+        {
+            var questionId = kv.Key;
+            var details    = kv.Value;
+
+            Guid? correctOptionId = null;
+            string? explanationText = null;
+
+            if (request.IsPractice)
+            {
+                // Pull correct option safely from public API summary lookup [1]
+                if (summaryLookup.TryGetValue(questionId, out var summary))
+                {
+                    correctOptionId = summary.CorrectOptionId;
+                }
+
+                // Concatenate explanation sections sequentially into standard Markdown [1]
+                if (explanationsMap.TryGetValue(questionId, out var explanation) && explanation.Sections.Any())
+                {
+                    explanationText = string.Join("\n\n", explanation.Sections
+                        .OrderBy(s => s.OrderIndex)
+                        .Select(s => $"**{s.Title}**\n{s.Content}"));
+                }
+            }
+
+            return new ExamQuestionDto(
+                Id:               questionId,
+                OrderIndex:       details.Order,
+                QuestionText:     details.Text,
+                QuestionImageUrl: details.Image,
+                Marks:            details.Marks,
+                Options:          details.Options,
+                CorrectOptionId:  correctOptionId,
+                ExplanationText:  explanationText
+            );
+        })
+        .OrderBy(q => q.OrderIndex)
+        .ToList();
+
+        // 10. Return complete atomic package [1]
         return new StartSessionResultDto(
             SessionId:     session.Id,
             StartTime:     session.StartTime,
             IsPractice:    session.IsPractice,
-            QuestionCount: questions.Count);
+            QuestionCount: questionsSummary.Count,
+            Questions:     examQuestions);
+    }
+
+    private sealed class QuestionRow
+    {
+        public Guid QuestionId { get; set; }
+        public int OrderIndex { get; set; }
+        public string QuestionText { get; set; } = string.Empty;
+        public decimal Marks { get; set; }
+        public string? QuestionImageUrl { get; set; }
+        public Guid? OptionId { get; set; }
+        public string? Label { get; set; }
+        public string? OptionText { get; set; }
+        public string? OptionImageUrl { get; set; }
     }
 }

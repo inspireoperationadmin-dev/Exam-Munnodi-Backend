@@ -6,6 +6,13 @@ namespace ScholarFlow.Infrastructure.Persistence.Repositories;
 
 public sealed class EfExplanationRepository(ApplicationDbContext db) : IExplanationRepository
 {
+    // Added: Query explanations in bulk including their ordered sections [1]
+    public Task<List<Explanation>> GetByQuestionIdsAsync(List<Guid> questionIds, CancellationToken ct = default)
+        => db.Explanations
+            .Include(e => e.Sections)
+            .Where(e => questionIds.Contains(e.QuestionId))
+            .ToListAsync(ct);
+
     public Task<Explanation?> GetByQuestionIdAsync(Guid questionId, CancellationToken ct = default)
         => db.Explanations
             .Include(e => e.Sections)

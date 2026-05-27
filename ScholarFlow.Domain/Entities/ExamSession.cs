@@ -62,11 +62,13 @@ public class ExamSession : AggregateRoot
     // ── Domain Methods ────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Score all responses using per-question marks.
-    /// marksPerQuestion: QuestionId → Marks value
+    /// Score all responses using per-question marks and correct options mapping [1].
+    /// marksPerQuestion: QuestionId → Marks value [1]
+    /// correctOptionPerQuestion: QuestionId → CorrectOptionId [1]
     /// </summary>
     public ExamScore Complete(
-        IReadOnlyDictionary<Guid, decimal> marksPerQuestion)
+        IReadOnlyDictionary<Guid, decimal> marksPerQuestion,
+        IReadOnlyDictionary<Guid, Guid> correctOptionPerQuestion) // <-- Added correct options parameter [1]
     {
         if (Status != ExamSessionStatus.InProgress)
             throw new DomainException("Only in-progress sessions can be completed.");
@@ -81,7 +83,10 @@ public class ExamSession : AggregateRoot
 
             if (response.SelectedOptionId.HasValue)
             {
-                if (response.SelectedOption!.IsCorrect)
+                var correctOptionId = correctOptionPerQuestion.GetValueOrDefault(response.QuestionId);
+
+                // Safe Guid ID comparison, avoiding EF null navigation properties [1]
+                if (response.SelectedOptionId.Value == correctOptionId)
                 {
                     response.Award(marks, isCorrect: true);
                     obtained += marks;

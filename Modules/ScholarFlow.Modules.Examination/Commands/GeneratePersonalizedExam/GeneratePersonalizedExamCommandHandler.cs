@@ -1,3 +1,4 @@
+using Dapper;
 using MediatR;
 using ScholarFlow.Domain.Entities;
 using ScholarFlow.Domain.Enums;
@@ -11,9 +12,10 @@ namespace ScholarFlow.Modules.Examination.Commands.GeneratePersonalizedExam;
 
 public sealed class GeneratePersonalizedExamCommandHandler(
     IExamSessionRepository examRepo,
-    IAcademicApi academicApi,
-    IAnalyticsApi analyticsApi,
-    ICurrentUser currentUser)
+    IAcademicApi           academicApi,
+    IAnalyticsApi          analyticsApi,
+    ISqlConnectionFactory  sql,             // <-- Injected for Dapper details load [1]
+    ICurrentUser           currentUser)
     : IRequestHandler<GeneratePersonalizedExamCommand, StartSessionResultDto>
 {
     private const int TotalQuestions        = 50;
@@ -114,6 +116,7 @@ public sealed class GeneratePersonalizedExamCommandHandler(
 
         await examRepo.AddAsync(session, ct);
 
+        // 10. Pre-populate UserResponse with direct OrderIndex mapping [1]
         for (int i = 0; i < selected.Count; i++)
         {
             await examRepo.AddResponseAsync(new UserResponse
@@ -121,6 +124,7 @@ public sealed class GeneratePersonalizedExamCommandHandler(
                 Id             = Guid.NewGuid(),
                 SessionId      = session.Id,
                 QuestionId     = selected[i],
+                OrderIndex     = i + 1, // Store layout index natively inside response [1]
                 ResponseStatus = ResponseStatus.Unvisited
             }, ct);
 
@@ -135,11 +139,77 @@ public sealed class GeneratePersonalizedExamCommandHandler(
 
         await examRepo.SaveChangesAsync(ct);
 
+        // 11. Fetch the shuffled question texts and option details using Dapper [1]
+        using var conn = sql.CreateConnection();
+
+        var rows = await conn.QueryAsync<QuestionRow>("""
+            SELECT
+                q.Id            AS QuestionId,
+                q.OrderIndex,
+                q.QuestionText,
+                q.Marks,
+                q.QuestionImageUrl,
+                o.Id            AS OptionId,
+                o.Label,
+                o.OptionText,
+                o.OptionImageUrl
+            FROM Questions q
+            LEFT JOIN Options o ON o.QuestionId = q.Id
+            WHERE q.Id IN @QuestionIds
+              AND q.IsDeleted  = 0
+            """,
+            new { QuestionIds = selected });
+
+        var questionsDict = new Dictionary<Guid, (int Order, string Text, string? Image, decimal Marks, List<ExamOptionDto> Options)>();
+
+        foreach (var row in rows)
+        {
+            if (!questionsDict.TryGetValue(row.QuestionId, out var q))
+            {
+                q = (row.OrderIndex, row.QuestionText, row.QuestionImageUrl, row.Marks, []);
+                questionsDict[row.QuestionId] = q;
+            }
+
+            if (row.OptionId.HasValue)
+            {
+                q.Options.Add(new ExamOptionDto(
+                    Id:             row.OptionId.Value,
+                    Label:          row.Label ?? string.Empty,
+                    OptionText:     row.OptionText ?? string.Empty,
+                    OptionImageUrl: row.OptionImageUrl));
+            }
+        }
+
+        // 12. Map results following the exact shuffled order in the 'selected' list [1]
+        var examQuestions = selected.Select((id, index) =>
+        {
+            if (!questionsDict.TryGetValue(id, out var details))
+            {
+                return null;
+            }
+
+            return new ExamQuestionDto(
+                Id:               id,
+                OrderIndex:       index + 1,
+                QuestionText:     details.Text,
+                QuestionImageUrl: details.Image,
+                Marks:            details.Marks,
+                Options:          details.Options,
+                CorrectOptionId:  null, // Personalized exams are never Practice Mode [1]
+                ExplanationText:  null  // Personalized exams are never Practice Mode [1]
+            );
+        })
+        .Where(q => q != null)
+        .Cast<ExamQuestionDto>()
+        .ToList();
+
+        // 13. Return atomic result containing the generated layout [1]
         return new StartSessionResultDto(
             SessionId:     session.Id,
             StartTime:     session.StartTime,
             IsPractice:    false,
-            QuestionCount: selected.Count);
+            QuestionCount: selected.Count,
+            Questions:     examQuestions);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -252,4 +322,17 @@ public sealed class GeneratePersonalizedExamCommandHandler(
     }
 
     private enum WeaknessTier { VeryWeak, Weak, Average, Unknown }
+
+    private sealed class QuestionRow
+    {
+        public Guid QuestionId { get; set; }
+        public int OrderIndex { get; set; }
+        public string QuestionText { get; set; } = string.Empty;
+        public decimal Marks { get; set; }
+        public string? QuestionImageUrl { get; set; }
+        public Guid? OptionId { get; set; }
+        public string? Label { get; set; }
+        public string? OptionText { get; set; }
+        public string? OptionImageUrl { get; set; }
+    }
 }
