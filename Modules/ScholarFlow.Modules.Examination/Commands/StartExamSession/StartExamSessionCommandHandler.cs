@@ -164,7 +164,7 @@ public sealed class StartExamSessionCommandHandler(
                 {
                     explanationText = string.Join("\n\n", explanation.Sections
                         .OrderBy(s => s.OrderIndex)
-                        .Select(s => $"**{s.Title}**\n{s.Content}"));
+                        .Select(s => $"$\\color{{orange}}{{\\textbf{{{s.Title}}}}}$\n{s.Content}"));
                 }
             }
 

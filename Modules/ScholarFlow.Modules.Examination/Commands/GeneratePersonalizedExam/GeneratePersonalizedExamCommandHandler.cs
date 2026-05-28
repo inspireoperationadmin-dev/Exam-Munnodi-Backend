@@ -14,7 +14,7 @@ public sealed class GeneratePersonalizedExamCommandHandler(
     IExamSessionRepository examRepo,
     IAcademicApi           academicApi,
     IAnalyticsApi          analyticsApi,
-    ISqlConnectionFactory  sql,             // <-- Injected for Dapper details load [1]
+    ISqlConnectionFactory  sql,
     ICurrentUser           currentUser)
     : IRequestHandler<GeneratePersonalizedExamCommand, StartSessionResultDto>
 {
@@ -116,7 +116,7 @@ public sealed class GeneratePersonalizedExamCommandHandler(
 
         await examRepo.AddAsync(session, ct);
 
-        // 10. Pre-populate UserResponse with direct OrderIndex mapping [1]
+        // 10. Pre-populate UserResponse with direct OrderIndex mapping
         for (int i = 0; i < selected.Count; i++)
         {
             await examRepo.AddResponseAsync(new UserResponse
@@ -124,7 +124,7 @@ public sealed class GeneratePersonalizedExamCommandHandler(
                 Id             = Guid.NewGuid(),
                 SessionId      = session.Id,
                 QuestionId     = selected[i],
-                OrderIndex     = i + 1, // Store layout index natively inside response [1]
+                OrderIndex     = i + 1, 
                 ResponseStatus = ResponseStatus.Unvisited
             }, ct);
 
@@ -139,7 +139,7 @@ public sealed class GeneratePersonalizedExamCommandHandler(
 
         await examRepo.SaveChangesAsync(ct);
 
-        // 11. Fetch the shuffled question texts and option details using Dapper [1]
+        // 11. Fetch the shuffled question texts and option details using Dapper (Added ORDER BY) [1]
         using var conn = sql.CreateConnection();
 
         var rows = await conn.QueryAsync<QuestionRow>("""
@@ -157,6 +157,7 @@ public sealed class GeneratePersonalizedExamCommandHandler(
             LEFT JOIN Options o ON o.QuestionId = q.Id
             WHERE q.Id IN @QuestionIds
               AND q.IsDeleted  = 0
+            ORDER BY o.Label // <-- Added SQL order [1]
             """,
             new { QuestionIds = selected });
 
@@ -180,7 +181,7 @@ public sealed class GeneratePersonalizedExamCommandHandler(
             }
         }
 
-        // 12. Map results following the exact shuffled order in the 'selected' list [1]
+        // 12. Map results following the exact shuffled order in the 'selected' list and sort options [1]
         var examQuestions = selected.Select((id, index) =>
         {
             if (!questionsDict.TryGetValue(id, out var details))
@@ -194,16 +195,16 @@ public sealed class GeneratePersonalizedExamCommandHandler(
                 QuestionText:     details.Text,
                 QuestionImageUrl: details.Image,
                 Marks:            details.Marks,
-                Options:          details.Options,
-                CorrectOptionId:  null, // Personalized exams are never Practice Mode [1]
-                ExplanationText:  null  // Personalized exams are never Practice Mode [1]
+                Options:          details.Options.OrderBy(o => o.Label).ToList(), // <-- Explicit memory sort [1]
+                CorrectOptionId:  null, 
+                ExplanationText:  null  
             );
         })
         .Where(q => q != null)
         .Cast<ExamQuestionDto>()
         .ToList();
 
-        // 13. Return atomic result containing the generated layout [1]
+        // 13. Return atomic result containing the generated layout
         return new StartSessionResultDto(
             SessionId:     session.Id,
             StartTime:     session.StartTime,

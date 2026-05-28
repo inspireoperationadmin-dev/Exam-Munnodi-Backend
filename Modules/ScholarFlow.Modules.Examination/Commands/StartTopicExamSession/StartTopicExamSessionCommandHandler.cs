@@ -21,7 +21,7 @@ public sealed class StartTopicExamSessionCommandHandler(
     {
         using var conn = sql.CreateConnection();
 
-        // 1. Fetch SubjectId and all available QuestionIds belonging to this Topic [1]
+        // 1. Fetch SubjectId and all available QuestionIds belonging to this Topic
         var subjectId = await conn.QuerySingleOrDefaultAsync<Guid?>("""
             SELECT SubjectId FROM Topics WHERE Id = @TopicId AND IsDeleted = 0
             """, new { request.TopicId });
@@ -39,23 +39,23 @@ public sealed class StartTopicExamSessionCommandHandler(
         if (questionIds.Count == 0)
             throw new BadRequestException("No questions available for this topic.");
 
-        // 2. Shuffle and take the requested limit (e.g., 10 or 20) in memory [1]
+        // 2. Shuffle and take the requested limit (e.g., 10 or 20) in memory
         var rng = new Random();
         var selectedIds = questionIds
             .OrderBy(_ => rng.Next())
             .Take(request.Limit)
             .ToList();
 
-        // 3. Create dynamic topic exam session (PaperId = null) [1]
+        // 3. Create dynamic topic exam session (PaperId = null)
         var session = ExamSession.Start(
             userId:         currentUser.UserId,
-            paperId:        null, // null for dynamic/topic sessions [1]
+            paperId:        null, 
             subjectId:      subjectId.Value,
             isPractice:     request.IsPractice);
 
         await examRepo.AddAsync(session, ct);
 
-        // 4. Pre-populate UserResponse & ExamSessionQuestion with sequential layout OrderIndexes [1]
+        // 4. Pre-populate UserResponse & ExamSessionQuestion with sequential layout OrderIndexes
         for (int i = 0; i < selectedIds.Count; i++)
         {
             var qId = selectedIds[i];
@@ -65,7 +65,7 @@ public sealed class StartTopicExamSessionCommandHandler(
                 Id             = Guid.NewGuid(),
                 SessionId      = session.Id,
                 QuestionId     = qId,
-                OrderIndex     = i + 1, // Store layout index natively [1]
+                OrderIndex     = i + 1, 
                 ResponseStatus = ResponseStatus.Unvisited
             }, ct);
 
@@ -80,24 +80,25 @@ public sealed class StartTopicExamSessionCommandHandler(
 
         await examRepo.SaveChangesAsync(ct);
 
-        // 5. Query detailed question texts and option lists using Dapper [1]
+        // 5. Query detailed question texts and option lists using Dapper (Added ORDER BY) [1]
         var rows = await conn.QueryAsync<QuestionRow>("""
-            SELECT
-                q.Id            AS QuestionId,
-                q.OrderIndex,
-                q.QuestionText,
-                q.Marks,
-                q.QuestionImageUrl,
-                o.Id            AS OptionId,
-                o.Label,
-                o.OptionText,
-                o.OptionImageUrl,
-                o.IsCorrect     AS OptionIsCorrect
-            FROM Questions q
-            LEFT JOIN Options o ON o.QuestionId = q.Id
-            WHERE q.Id IN @QuestionIds
-              AND q.IsDeleted  = 0
-            """,
+                    SELECT
+                        q.Id            AS QuestionId,
+                        q.OrderIndex,
+                        q.QuestionText,
+                        q.Marks,
+                        q.QuestionImageUrl,
+                        o.Id            AS OptionId,
+                        o.Label,
+                        o.OptionText,
+                        o.OptionImageUrl,
+                        o.IsCorrect     AS OptionIsCorrect
+                    FROM Questions q
+                    LEFT JOIN Options o ON o.QuestionId = q.Id
+                    WHERE q.Id IN @QuestionIds
+                    AND q.IsDeleted  = 0
+                    ORDER BY o.Label -- <-- Corrected T-SQL comment style [1]
+                    """,
             new { QuestionIds = selectedIds });
 
         var questionsDict = new Dictionary<Guid, (int Order, string Text, string? Image, decimal Marks, List<ExamOptionDto> Options, Guid? CorrectOptionId)>();
@@ -120,13 +121,12 @@ public sealed class StartTopicExamSessionCommandHandler(
 
                 if (row.OptionIsCorrect)
                 {
-                    // Track correct option Guid directly from option records [1]
                     questionsDict[row.QuestionId] = (q.Order, q.Text, q.Image, q.Marks, q.Options, row.OptionId.Value);
                 }
             }
         }
 
-        // 6. If Practice Mode, retrieve all explanation sections in a single bulk query [1]
+        // 6. If Practice Mode, retrieve all explanation sections in a single bulk query
         var explanationsMap = new Dictionary<Guid, Explanation>();
         if (request.IsPractice)
         {
@@ -134,7 +134,7 @@ public sealed class StartTopicExamSessionCommandHandler(
             explanationsMap = explanationsList.ToDictionary(e => e.QuestionId);
         }
 
-        // 7. Map final DTO list following the exact randomized shuffled sequence [1]
+        // 7. Map final DTO list following the exact randomized shuffled sequence and sort options [1]
         var examQuestions = selectedIds.Select((id, index) =>
         {
             if (!questionsDict.TryGetValue(id, out var details))
@@ -149,12 +149,11 @@ public sealed class StartTopicExamSessionCommandHandler(
             {
                 correctOptionId = details.CorrectOptionId;
 
-                // Concatenate explanation sections sequentially into standard Markdown [1]
                 if (explanationsMap.TryGetValue(id, out var explanation) && explanation.Sections.Any())
                 {
                     explanationText = string.Join("\n\n", explanation.Sections
                         .OrderBy(s => s.OrderIndex)
-                        .Select(s => $"**{s.Title}**\n{s.Content}"));
+                        .Select(s => $"$\\color{{orange}}{{\\textbf{{{s.Title}}}}}$\n{s.Content}"));
                 }
             }
 
@@ -164,7 +163,7 @@ public sealed class StartTopicExamSessionCommandHandler(
                 QuestionText:     details.Text,
                 QuestionImageUrl: details.Image,
                 Marks:            details.Marks,
-                Options:          details.Options,
+                Options:          details.Options.OrderBy(o => o.Label).ToList(), // <-- Explicit memory sort [1]
                 CorrectOptionId:  correctOptionId,
                 ExplanationText:  explanationText
             );
@@ -173,7 +172,6 @@ public sealed class StartTopicExamSessionCommandHandler(
         .Cast<ExamQuestionDto>()
         .ToList();
 
-        // 8. Return the complete package containing the questions list [1]
         return new StartSessionResultDto(
             SessionId:     session.Id,
             StartTime:     session.StartTime,
