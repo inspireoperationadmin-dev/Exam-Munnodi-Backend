@@ -1,8 +1,8 @@
+using Dapper;
 using MediatR;
 using ScholarFlow.Domain.Enums;
 using ScholarFlow.Domain.Interfaces;
 using ScholarFlow.Domain.Interfaces.Repositories;
-using ScholarFlow.Modules.Academic.Public;
 using ScholarFlow.Modules.Examination.DTOs;
 using ScholarFlow.SharedKernel.Exceptions;
 
@@ -10,7 +10,7 @@ namespace ScholarFlow.Modules.Examination.Commands.EndExamSession;
 
 public sealed class EndExamSessionCommandHandler(
     IExamSessionRepository examRepo,
-    IAcademicApi           academicApi,
+    ISqlConnectionFactory  sql,             // <-- Injected for high-performance Dapper lookup [1]
     ICurrentUser           currentUser)
     : IRequestHandler<EndExamSessionCommand, EndSessionResultDto>
 {
@@ -26,9 +26,6 @@ public sealed class EndExamSessionCommandHandler(
 
         if (session.Status != ExamSessionStatus.InProgress)
             throw new BadRequestException("Session is not in progress.");
-
-        var paper = await academicApi.GetPaperSummaryAsync(session.PaperId!.Value, ct)
-            ?? throw new NotFoundException("Paper not found.");
 
         // 2. Map and update the user's responses locally [1]
         foreach (var submitted in request.SubmittedAnswers)
@@ -51,21 +48,35 @@ public sealed class EndExamSessionCommandHandler(
             response.TimeSpentSeconds = submitted.TimeSpentSeconds;
         }
 
-        // 3. Load per-question marks and correct options lookup mapping [1]
-        var questions = await academicApi.GetQuestionsForExamAsync(session.PaperId!.Value, ct);
-        
-        var marksPerQuestion = questions.ToDictionary(
-            q => q.QuestionId,
-            q => q.Marks);
+        // 3. Query the Marks and CorrectOptionId directly from the database for all questions in this session [1]
+        var questionIds = session.UserResponses.Select(r => r.QuestionId).ToList();
 
-        var correctOptionPerQuestion = questions.ToDictionary(
-            q => q.QuestionId,
-            q => q.CorrectOptionId); // <-- Added [1]
+        using var conn = sql.CreateConnection();
+        var gradingDetails = (await conn.QueryAsync<GradingRow>("""
+            SELECT 
+                q.Id AS QuestionId,
+                q.Marks,
+                o.Id AS CorrectOptionId
+            FROM Questions q
+            LEFT JOIN Options o ON o.QuestionId = q.Id AND o.IsCorrect = 1
+            WHERE q.Id IN @QuestionIds
+              AND q.IsDeleted = 0
+            """,
+            new { QuestionIds = questionIds })).ToList();
 
-        // 4. Score using per-question marks and correct options mapping [1]
+        // 4. Construct lookup dictionaries for the scoring engine [1]
+        var marksPerQuestion = gradingDetails.ToDictionary(
+            g => g.QuestionId,
+            g => g.Marks);
+
+        var correctOptionPerQuestion = gradingDetails.ToDictionary(
+            g => g.QuestionId,
+            g => g.CorrectOptionId ?? Guid.Empty); // Fallback if no correct option is configured [1]
+
+        // 5. Score using per-question marks and correct options mapping [1]
         var score = session.Complete(marksPerQuestion, correctOptionPerQuestion);
 
-        // 5. Commit all changed states atomically to Azure SQL
+        // 6. Commit all changed states atomically to Azure SQL
         await examRepo.SaveChangesAsync(ct);
 
         int correctCount = session.UserResponses.Count(r => r.IsCorrect);
@@ -86,5 +97,12 @@ public sealed class EndExamSessionCommandHandler(
             SkippedCount:     skippedCount,
             TimeTakenSeconds: timeTaken,
             IsPractice:       session.IsPractice);
+    }
+
+    private sealed class GradingRow
+    {
+        public Guid QuestionId { get; set; }
+        public decimal Marks { get; set; }
+        public Guid? CorrectOptionId { get; set; }
     }
 }

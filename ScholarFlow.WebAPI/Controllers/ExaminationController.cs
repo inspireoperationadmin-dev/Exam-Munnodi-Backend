@@ -6,6 +6,7 @@ using ScholarFlow.Modules.Examination.Commands.EndExamSession;
 using ScholarFlow.Modules.Examination.Commands.FlagQuestion;
 using ScholarFlow.Modules.Examination.Commands.GeneratePersonalizedExam;
 using ScholarFlow.Modules.Examination.Commands.StartExamSession;
+using ScholarFlow.Modules.Examination.Commands.StartTopicExamSession; // <-- Added namespace import [1]
 using ScholarFlow.Modules.Examination.Commands.SubmitAnswer;
 using ScholarFlow.Modules.Examination.Queries.GetAvailablePapers;
 using ScholarFlow.Modules.Examination.Queries.GetMySessions;
@@ -39,6 +40,11 @@ public sealed class ExaminationController(IMediator mediator) : ControllerBase
 
     [HttpPost("sessions/start")]
     public async Task<IActionResult> StartSession([FromBody] StartExamSessionCommand command, CancellationToken ct)
+        => Ok(await mediator.Send(command, ct));
+
+    // New: Handle Topic-Wise / Unit-Wise randomized exam session startup [1]
+    [HttpPost("sessions/start-topic")]
+    public async Task<IActionResult> StartTopicSession([FromBody] StartTopicExamSessionCommand command, CancellationToken ct)
         => Ok(await mediator.Send(command, ct));
 
     [HttpGet("sessions/has-completed/{paperId:guid}")]
