@@ -16,7 +16,7 @@ public sealed class StartExamSessionCommandHandler(
     IAcademicApi           academicApi,
     IUserProfilesApi       userProfilesApi,
     IExplanationRepository explanationRepo,
-    ISqlConnectionFactory  sql,             // <-- Injected for high-performance Dapper query [1]
+    ISqlConnectionFactory  sql,             // <-- Injected for high-performance Dapper query
     ICurrentUser           currentUser)
     : IRequestHandler<StartExamSessionCommand, StartSessionResultDto>
 {
@@ -49,7 +49,7 @@ public sealed class StartExamSessionCommandHandler(
                 throw new ConflictException("You have already completed this paper in exam mode.");
         }
 
-        // 4. Load all questions summary via Academic module public API (stores CorrectOptionId and Marks) [1]
+        // 4. Load all questions summary via Academic module public API (stores CorrectOptionId and Marks)
         var questionsSummary = await academicApi.GetQuestionsForExamAsync(request.PaperId, ct);
 
         if (questionsSummary.Count == 0)
@@ -64,7 +64,7 @@ public sealed class StartExamSessionCommandHandler(
 
         await examRepo.AddAsync(session, ct);
 
-        // 6. Create UserResponse + ExamSessionQuestion for each question [1]
+        // 6. Create UserResponse + ExamSessionQuestion for each question
         for (int i = 0; i < questionsSummary.Count; i++)
         {
             var q = questionsSummary[i];
@@ -74,7 +74,7 @@ public sealed class StartExamSessionCommandHandler(
                 Id             = Guid.NewGuid(),
                 SessionId      = session.Id,
                 QuestionId     = q.QuestionId,
-                OrderIndex     = i + 1, // Store layout index natively inside response [1]
+                OrderIndex     = i + 1, // Store layout index natively inside response
                 ResponseStatus = ResponseStatus.Unvisited
             }, ct);
 
@@ -89,7 +89,7 @@ public sealed class StartExamSessionCommandHandler(
 
         await examRepo.SaveChangesAsync(ct);
 
-        // 7. Fetch the detailed question texts and option details using Dapper [1]
+        // 7. Fetch the detailed question texts and option details using Dapper
         using var conn = sql.CreateConnection();
 
         var rows = await conn.QueryAsync<QuestionRow>("""
@@ -131,7 +131,7 @@ public sealed class StartExamSessionCommandHandler(
             }
         }
 
-        // 8. If Practice Mode, retrieve all explanation sections in a single bulk query [1]
+        // 8. If Practice Mode, retrieve all explanation sections in a single bulk query
         var explanationsMap = new Dictionary<Guid, Explanation>();
         var summaryLookup = questionsSummary.ToDictionary(q => q.QuestionId);
 
@@ -142,7 +142,7 @@ public sealed class StartExamSessionCommandHandler(
             explanationsMap = explanationsList.ToDictionary(e => e.QuestionId);
         }
 
-        // 9. Map final DTO array with security conditional checks [1]
+        // 9. Map final DTO array with security conditional checks
         var examQuestions = questionsDict.Select(kv =>
         {
             var questionId = kv.Key;
@@ -153,18 +153,18 @@ public sealed class StartExamSessionCommandHandler(
 
             if (request.IsPractice)
             {
-                // Pull correct option safely from public API summary lookup [1]
+                // Pull correct option safely from public API summary lookup
                 if (summaryLookup.TryGetValue(questionId, out var summary))
                 {
                     correctOptionId = summary.CorrectOptionId;
                 }
 
-                // Concatenate explanation sections sequentially into standard Markdown [1]
+                // Returns a clean, non-LaTeX string with the title on the first line [1]
                 if (explanationsMap.TryGetValue(questionId, out var explanation) && explanation.Sections.Any())
                 {
                     explanationText = string.Join("\n\n", explanation.Sections
                         .OrderBy(s => s.OrderIndex)
-                        .Select(s => $"$\\color{{orange}}{{\\textbf{{{s.Title}}}}}$\n{s.Content}"));
+                        .Select(s => $"{s.Title}\n{s.Content}"));
                 }
             }
 
@@ -182,7 +182,7 @@ public sealed class StartExamSessionCommandHandler(
         .OrderBy(q => q.OrderIndex)
         .ToList();
 
-        // 10. Return complete atomic package [1]
+        // 10. Return complete atomic package
         return new StartSessionResultDto(
             SessionId:     session.Id,
             StartTime:     session.StartTime,

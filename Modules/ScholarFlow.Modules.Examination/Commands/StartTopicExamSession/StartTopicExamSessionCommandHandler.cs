@@ -80,7 +80,7 @@ public sealed class StartTopicExamSessionCommandHandler(
 
         await examRepo.SaveChangesAsync(ct);
 
-        // 5. Query detailed question texts and option lists using Dapper (Added ORDER BY) [1]
+        // 5. Query detailed question texts and option lists using Dapper (Added ORDER BY)
         var rows = await conn.QueryAsync<QuestionRow>("""
                     SELECT
                         q.Id            AS QuestionId,
@@ -134,7 +134,7 @@ public sealed class StartTopicExamSessionCommandHandler(
             explanationsMap = explanationsList.ToDictionary(e => e.QuestionId);
         }
 
-        // 7. Map final DTO list following the exact randomized shuffled sequence and sort options [1]
+        // 7. Map final DTO list following the exact randomized shuffled sequence and sort options
         var examQuestions = selectedIds.Select((id, index) =>
         {
             if (!questionsDict.TryGetValue(id, out var details))
@@ -149,11 +149,12 @@ public sealed class StartTopicExamSessionCommandHandler(
             {
                 correctOptionId = details.CorrectOptionId;
 
+                // Returns a clean, non-LaTeX string with the title on the first line [1]
                 if (explanationsMap.TryGetValue(id, out var explanation) && explanation.Sections.Any())
                 {
                     explanationText = string.Join("\n\n", explanation.Sections
                         .OrderBy(s => s.OrderIndex)
-                        .Select(s => $"$\\color{{orange}}{{\\textbf{{{s.Title}}}}}$\n{s.Content}"));
+                        .Select(s => $"{s.Title}\n{s.Content}"));
                 }
             }
 
@@ -163,9 +164,9 @@ public sealed class StartTopicExamSessionCommandHandler(
                 QuestionText:     details.Text,
                 QuestionImageUrl: details.Image,
                 Marks:            details.Marks,
-                Options:          details.Options.OrderBy(o => o.Label).ToList(), // <-- Explicit memory sort [1]
+                Options:          details.Options.OrderBy(o => o.Label).ToList(), // <-- Explicit memory sort
                 CorrectOptionId:  correctOptionId,
-                ExplanationText:  explanationText
+                explanationText
             );
         })
         .Where(q => q != null)
