@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using ScholarFlow.Domain.Enums;
 using ScholarFlow.Modules.Academic.Commands.Papers.AddExplanation;
 using ScholarFlow.Modules.Academic.Commands.Papers.AddQuestionToPaper;
+using ScholarFlow.Modules.Academic.Commands.Papers.BulkUploadQuestions; // <-- Added namespace import [1]
 using ScholarFlow.Modules.Academic.Commands.Papers.CreatePaper;
 using ScholarFlow.Modules.Academic.Commands.Papers.DeleteExplanation;
 using ScholarFlow.Modules.Academic.Commands.Papers.DeletePaper;
@@ -227,6 +228,12 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
     [HttpPost("papers/{paperId:guid}/questions")]
     [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher},{AppRole.SuperAdmin}")]
     public async Task<IActionResult> AddQuestion(Guid paperId, [FromBody] AddQuestionToPaperCommand command, CancellationToken ct)
+        => Ok(await mediator.Send(command with { PaperId = paperId }, ct));
+
+    // Added: Fast transactional bulk questions upload [1, 25]
+    [HttpPost("papers/{paperId:guid}/questions/bulk")]
+    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher},{AppRole.SuperAdmin}")]
+    public async Task<IActionResult> BulkUploadQuestions(Guid paperId, [FromBody] BulkUploadQuestionsCommand command, CancellationToken ct)
         => Ok(await mediator.Send(command with { PaperId = paperId }, ct));
 
     [HttpPut("questions/{id:guid}")]

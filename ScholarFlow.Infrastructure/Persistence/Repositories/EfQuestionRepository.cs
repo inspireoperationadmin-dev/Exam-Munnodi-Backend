@@ -6,6 +6,14 @@ namespace ScholarFlow.Infrastructure.Persistence.Repositories;
 
 public sealed class EfQuestionRepository(ApplicationDbContext db) : IQuestionRepository
 {
+    // Added: High-performance bulk range insertions for questions [1, 25]
+    public async Task AddRangeAsync(IEnumerable<Question> questions, CancellationToken ct = default)
+        => await db.Questions.AddRangeAsync(questions, ct);
+
+    // Added: High-performance bulk range insertions for options [1, 25]
+    public async Task AddOptionsRangeAsync(IEnumerable<Option> options, CancellationToken ct = default)
+        => await db.Options.AddRangeAsync(options, ct);
+
     public Task<List<Question>> GetByPaperIdAsync(Guid paperId, CancellationToken ct = default)
         => db.Questions
             .Where(q => q.PaperId == paperId)
