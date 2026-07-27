@@ -17,10 +17,14 @@ public sealed class GetSubjectDetailQueryHandler(ISqlConnectionFactory sql)
         var rows = await conn.QueryAsync<SubjectRow>("""
             SELECT
                 s.Id         AS SubjectId,
-                s.Name       AS SubjectName,
+                s.NameEnglish AS SubjectNameEnglish,
+                s.NameTamil   AS SubjectNameTamil,
+                s.NameSinhala AS SubjectNameSinhala,
                 s.Description,
                 st.Id        AS StreamId,
-                st.Name      AS StreamName,
+                st.NameEnglish AS StreamNameEnglish,
+                st.NameTamil   AS StreamNameTamil,
+                st.NameSinhala AS StreamNameSinhala,
                 (SELECT COUNT(*) FROM Topics t WHERE t.SubjectId = s.Id AND t.IsDeleted = 0) AS TopicCount
             FROM Subjects s
             LEFT JOIN SubjectStreams ss ON ss.SubjectId = s.Id
@@ -36,18 +40,33 @@ public sealed class GetSubjectDetailQueryHandler(ISqlConnectionFactory sql)
         var first = list[0];
         var streams = list
             .Where(r => r.StreamId.HasValue)
-            .Select(r => new StreamDto(r.StreamId!.Value, r.StreamName!, null))
+            .Select(r => new StreamDto(
+                r.StreamId!.Value,
+                r.StreamNameEnglish!,
+                r.StreamNameTamil,
+                r.StreamNameSinhala,
+                null))
             .ToList();
 
         return new SubjectDetailDto(
             first.SubjectId,
-            first.SubjectName,
-            first.Description,
             streams,
-            first.TopicCount);
+            first.TopicCount,
+            first.SubjectNameEnglish,
+            first.SubjectNameTamil,
+            first.SubjectNameSinhala,
+            first.Description);
     }
 
     private sealed record SubjectRow(
-        Guid SubjectId, string SubjectName, string? Description,
-        Guid? StreamId, string? StreamName, int TopicCount);
+        Guid SubjectId,
+        string SubjectNameEnglish,
+        string? SubjectNameTamil,
+        string? SubjectNameSinhala,
+        string? Description,
+        Guid? StreamId,
+        string? StreamNameEnglish,
+        string? StreamNameTamil,
+        string? StreamNameSinhala,
+        int TopicCount);
 }

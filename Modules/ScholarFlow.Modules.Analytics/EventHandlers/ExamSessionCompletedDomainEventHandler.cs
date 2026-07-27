@@ -16,8 +16,8 @@ public sealed class ExamSessionCompletedDomainEventHandler(
 {
     public async Task Handle(ExamSessionCompletedDomainEvent notification, CancellationToken ct)
     {
-        // Practice sessions do not affect analytics
-        if (notification.IsPractice) return;
+        // Only mock exam sessions feed student progress analytics.
+        if (notification.Mode != ExamMode.MockExam) return;
 
         var responses = await examinationApi.GetSessionResponsesAsync(notification.SessionId, ct);
         if (responses.Count == 0) return;

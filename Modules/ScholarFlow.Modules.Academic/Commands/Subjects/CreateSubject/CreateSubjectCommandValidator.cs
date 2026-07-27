@@ -6,7 +6,9 @@ public sealed class CreateSubjectCommandValidator : AbstractValidator<CreateSubj
 {
     public CreateSubjectCommandValidator()
     {
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(150);
+        RuleFor(x => x.NameEnglish).NotEmpty().MaximumLength(150);
+        RuleFor(x => x.NameTamil).MaximumLength(150);
+        RuleFor(x => x.NameSinhala).MaximumLength(150);
         RuleFor(x => x.Description).MaximumLength(500);
         RuleFor(x => x.StreamIds).NotNull();
         RuleForEach(x => x.StreamIds).NotEmpty();

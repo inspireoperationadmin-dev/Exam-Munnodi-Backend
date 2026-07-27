@@ -12,8 +12,15 @@ public sealed class UpdateSubTopicCommandHandler(ITopicRepository repo)
         var subTopic = await repo.GetSubTopicByIdAsync(request.Id, ct)
             ?? throw new NotFoundException("SubTopic not found.");
 
-        subTopic.Update(request.Name, request.OrderIndex);
+        subTopic.Update(
+            request.NameEnglish.Trim(),
+            request.OrderIndex,
+            NormalizeOptional(request.NameTamil),
+            NormalizeOptional(request.NameSinhala));
         repo.UpdateSubTopic(subTopic);
         await repo.SaveChangesAsync(ct);
     }
+
+    private static string? NormalizeOptional(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

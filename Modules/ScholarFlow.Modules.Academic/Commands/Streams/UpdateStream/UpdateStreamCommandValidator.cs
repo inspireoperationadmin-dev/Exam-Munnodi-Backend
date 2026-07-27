@@ -7,7 +7,9 @@ public sealed class UpdateStreamCommandValidator : AbstractValidator<UpdateStrea
     public UpdateStreamCommandValidator()
     {
         RuleFor(x => x.Id).NotEmpty();
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(100);
+        RuleFor(x => x.NameEnglish).NotEmpty().MaximumLength(100);
+        RuleFor(x => x.NameTamil).MaximumLength(100);
+        RuleFor(x => x.NameSinhala).MaximumLength(100);
         RuleFor(x => x.Description).MaximumLength(500);
     }
 }

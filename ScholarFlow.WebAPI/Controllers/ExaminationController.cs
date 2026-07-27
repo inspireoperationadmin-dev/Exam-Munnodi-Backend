@@ -88,9 +88,9 @@ public sealed class ExaminationController(IMediator mediator) : ControllerBase
     [HttpGet("sessions")]
     public async Task<IActionResult> GetMySessions(
         [FromQuery] Guid? paperId,
-        [FromQuery] bool? isPractice,
+        [FromQuery] ExamMode? mode,
         CancellationToken ct)
-        => Ok(await mediator.Send(new GetMySessionsQuery(paperId, isPractice), ct));
+        => Ok(await mediator.Send(new GetMySessionsQuery(paperId, mode), ct));
 
     [HttpGet("sessions/{id:guid}")]
     public async Task<IActionResult> GetSessionDetail(Guid id, CancellationToken ct)

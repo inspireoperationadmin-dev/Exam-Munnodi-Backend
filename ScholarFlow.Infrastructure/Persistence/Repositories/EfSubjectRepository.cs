@@ -13,7 +13,7 @@ public sealed class EfSubjectRepository(ApplicationDbContext db) : ISubjectRepos
         if (streamId.HasValue)
             query = query.Where(s => s.SubjectStreams.Any(ss => ss.StreamId == streamId.Value));
 
-        return query.OrderBy(s => s.Name).ToListAsync(ct);
+        return query.OrderBy(s => s.NameEnglish).ToListAsync(ct);
     }
 
     public Task<Subject?> GetByIdAsync(Guid id, CancellationToken ct = default)
@@ -22,7 +22,7 @@ public sealed class EfSubjectRepository(ApplicationDbContext db) : ISubjectRepos
             .FirstOrDefaultAsync(s => s.Id == id, ct);
 
     public Task<bool> ExistsByNameAsync(string name, CancellationToken ct = default)
-        => db.Subjects.AnyAsync(s => s.Name == name, ct);
+        => db.Subjects.AnyAsync(s => s.NameEnglish == name, ct);
 
     public Task<SubjectStream?> GetSubjectStreamAsync(Guid subjectId, Guid streamId, CancellationToken ct = default)
         => db.SubjectStreams.FirstOrDefaultAsync(ss => ss.SubjectId == subjectId && ss.StreamId == streamId, ct);

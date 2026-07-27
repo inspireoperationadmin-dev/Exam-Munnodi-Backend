@@ -7,7 +7,9 @@ public sealed class UpdateTopicCommandValidator : AbstractValidator<UpdateTopicC
     public UpdateTopicCommandValidator()
     {
         RuleFor(x => x.Id).NotEmpty();
-        RuleFor(x => x.TopicName).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.NameEnglish).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.NameTamil).MaximumLength(200);
+        RuleFor(x => x.NameSinhala).MaximumLength(200);
         RuleFor(x => x.OrderIndex).GreaterThanOrEqualTo(0);
     }
 }

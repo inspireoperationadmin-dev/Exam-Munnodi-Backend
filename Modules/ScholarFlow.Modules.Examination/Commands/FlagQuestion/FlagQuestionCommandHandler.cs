@@ -22,6 +22,9 @@ public sealed class FlagQuestionCommandHandler(
         if (session.Status != ExamSessionStatus.InProgress)
             throw new BadRequestException("Session is not in progress.");
 
+        if (session.HasExpired(DateTime.UtcNow))
+            throw new BadRequestException("Exam time has expired.");
+
         var response = await examRepo.GetResponseAsync(request.SessionId, request.QuestionId, ct)
             ?? throw new NotFoundException("Response record not found.");
 

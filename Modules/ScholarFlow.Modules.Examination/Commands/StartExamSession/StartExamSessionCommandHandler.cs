@@ -39,8 +39,8 @@ public sealed class StartExamSessionCommandHandler(
                 throw new ForbiddenException("You do not have access to this paper.");
         }
 
-        // 3. Exam mode: one attempt only
-        if (!request.IsPractice)
+        // 3. Fixed exam mode: one completed attempt per paper.
+        if (request.Mode == ExamMode.FixedExam)
         {
             bool alreadyAttempted = await examRepo.HasCompletedExamSessionAsync(
                 currentUser.UserId, request.PaperId, ct);
@@ -60,7 +60,8 @@ public sealed class StartExamSessionCommandHandler(
             userId:       currentUser.UserId,
             paperId:      request.PaperId,
             subjectId:    paper.SubjectId,
-            isPractice:   request.IsPractice);
+            mode:         request.Mode,
+            timeLimitMinutes: request.Mode == ExamMode.Practice ? null : paper.TimeLimit);
 
         await examRepo.AddAsync(session, ct);
 
@@ -135,7 +136,7 @@ public sealed class StartExamSessionCommandHandler(
         var explanationsMap = new Dictionary<Guid, Explanation>();
         var summaryLookup = questionsSummary.ToDictionary(q => q.QuestionId);
 
-        if (request.IsPractice)
+        if (request.Mode == ExamMode.Practice)
         {
             var questionIds = questionsSummary.Select(q => q.QuestionId).ToList();
             var explanationsList = await explanationRepo.GetByQuestionIdsAsync(questionIds, ct);
@@ -151,7 +152,7 @@ public sealed class StartExamSessionCommandHandler(
             Guid? correctOptionId = null;
             string? explanationText = null;
 
-            if (request.IsPractice)
+            if (request.Mode == ExamMode.Practice)
             {
                 // Pull correct option safely from public API summary lookup
                 if (summaryLookup.TryGetValue(questionId, out var summary))
@@ -186,7 +187,10 @@ public sealed class StartExamSessionCommandHandler(
         return new StartSessionResultDto(
             SessionId:     session.Id,
             StartTime:     session.StartTime,
-            IsPractice:    session.IsPractice,
+            ServerNow:     DateTime.UtcNow,
+            ExpiresAt:     session.ExpiresAt,
+            TimeLimitMinutes: session.TimeLimitMinutes,
+            Mode:          session.Mode.ToString(),
             QuestionCount: questionsSummary.Count,
             Questions:     examQuestions);
     }

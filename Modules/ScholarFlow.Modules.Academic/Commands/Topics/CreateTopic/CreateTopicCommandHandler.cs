@@ -9,13 +9,23 @@ public sealed class CreateTopicCommandHandler(ITopicRepository repo)
 {
     public async Task<Guid> Handle(CreateTopicCommand request, CancellationToken ct)
     {
-        var topic = Topic.Create(request.SubjectId, request.TopicName, request.OrderIndex);
+        var topic = Topic.Create(
+            request.SubjectId,
+            request.NameEnglish.Trim(),
+            request.OrderIndex,
+            NormalizeOptional(request.NameTamil),
+            NormalizeOptional(request.NameSinhala));
 
         await repo.AddAsync(topic, ct);
 
         foreach (var item in request.SubTopics)
         {
-            var subTopic = SubTopic.Create(topic.Id, item.Name, item.OrderIndex);
+            var subTopic = SubTopic.Create(
+                topic.Id,
+                item.NameEnglish.Trim(),
+                item.OrderIndex,
+                NormalizeOptional(item.NameTamil),
+                NormalizeOptional(item.NameSinhala));
             await repo.AddSubTopicAsync(subTopic, ct);
         }
 
@@ -23,4 +33,7 @@ public sealed class CreateTopicCommandHandler(ITopicRepository repo)
 
         return topic.Id;
     }
+
+    private static string? NormalizeOptional(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

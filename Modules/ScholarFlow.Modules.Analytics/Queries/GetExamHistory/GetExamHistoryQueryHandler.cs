@@ -26,7 +26,7 @@ public sealed class GetExamHistoryQueryHandler(
             LEFT JOIN Papers p ON p.Id = es.PaperId
             WHERE es.UserId     = @UserId
               AND es.Status     = 'Completed'
-              AND es.IsPractice = 0
+              AND es.Mode       = 'MockExam'
               AND (
                     p.SubjectId = @SubjectId
                  OR es.SubjectId = @SubjectId

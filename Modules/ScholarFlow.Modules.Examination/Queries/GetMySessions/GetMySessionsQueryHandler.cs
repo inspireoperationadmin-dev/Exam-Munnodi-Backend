@@ -19,11 +19,13 @@ public sealed class GetMySessionsQueryHandler(
                 es.Id           AS SessionId,
                 es.PaperId,
                 p.Title         AS PaperTitle,
-                s.Name          AS SubjectName,
+                s.NameEnglish   AS SubjectName,
                 es.StartTime,
+                es.ExpiresAt,
+                es.TimeLimitMinutes,
                 es.EndTime,
                 es.Status,
-                es.IsPractice,
+                es.Mode,
                 es.FinalScore   AS Percentage,
                 es.ObtainedMarks,
                 es.TotalMarks
@@ -31,15 +33,15 @@ public sealed class GetMySessionsQueryHandler(
             LEFT JOIN Papers p  ON p.Id = es.PaperId
             LEFT JOIN Subjects s ON s.Id = p.SubjectId
             WHERE es.UserId = @UserId
-              AND (@PaperId    IS NULL OR es.PaperId    = @PaperId)
-              AND (@IsPractice IS NULL OR es.IsPractice = @IsPractice)
+              AND (@PaperId IS NULL OR es.PaperId = @PaperId)
+              AND (@Mode    IS NULL OR es.Mode    = @Mode)
             ORDER BY es.StartTime DESC
             """,
             new
             {
                 UserId     = currentUser.UserId,
                 request.PaperId,
-                request.IsPractice
+                Mode = request.Mode?.ToString()
             });
 
         return rows.Select(r => new SessionSummaryDto(
@@ -48,9 +50,12 @@ public sealed class GetMySessionsQueryHandler(
             PaperTitle:   r.PaperTitle,
             SubjectName:  r.SubjectName,
             StartTime:    r.StartTime,
+            ServerNow:    DateTime.UtcNow,
+            ExpiresAt:    r.ExpiresAt,
+            TimeLimitMinutes: r.TimeLimitMinutes,
             EndTime:      r.EndTime,
             Status:       r.Status,
-            IsPractice:   r.IsPractice,
+            Mode:         r.Mode,
             Percentage:   r.Percentage,
             ObtainedMarks: r.ObtainedMarks,
             TotalMarks:   r.TotalMarks))
@@ -63,9 +68,11 @@ public sealed class GetMySessionsQueryHandler(
         string? PaperTitle,
         string? SubjectName,
         DateTime StartTime,
+        DateTime? ExpiresAt,
+        int? TimeLimitMinutes,
         DateTime? EndTime,
         string Status,
-        bool IsPractice,
+        string Mode,
         decimal? Percentage,
         decimal? ObtainedMarks,
         decimal? TotalMarks);

@@ -18,35 +18,32 @@ public sealed class GeneratePersonalizedExamCommandHandler(
     ICurrentUser           currentUser)
     : IRequestHandler<GeneratePersonalizedExamCommand, StartSessionResultDto>
 {
-    private const int TotalQuestions        = 50;
     private const int RecentDays            = 7;
     private const int MinAttemptsForTier    = 1;
 
     public async Task<StartSessionResultDto> Handle(GeneratePersonalizedExamCommand request, CancellationToken ct)
     {
-        // 1. Load question pool + student data in parallel
-        var poolTask        = academicApi.GetQuestionPoolAsync(request.SubjectId, ct);
-        var performanceTask = analyticsApi.GetSubTopicPerformancesAsync(currentUser.UserId, request.SubjectId, ct);
-        var recentTask      = analyticsApi.GetRecentlySeenQuestionIdsAsync(currentUser.UserId, RecentDays, ct);
-
-        await Task.WhenAll(poolTask, performanceTask, recentTask);
-
-        var pool              = poolTask.Result;
-        var performances      = performanceTask.Result;
-        var recentQuestionIds = recentTask.Result;
+        // These module APIs share the request-scoped DbContext, so keep the EF calls sequential.
+        var pool = await academicApi.GetQuestionPoolAsync(request.SubjectId, ct);
+        var performances = await analyticsApi.GetSubTopicPerformancesAsync(currentUser.UserId, request.SubjectId, ct);
+        var recentQuestionIds = await analyticsApi.GetRecentlySeenQuestionIdsAsync(currentUser.UserId, RecentDays, ct);
 
         if (pool.Count == 0)
             throw new BadRequestException("No questions available for this subject.");
 
+        var totalQuestions = request.QuestionCount;
+        var mockExamTimeLimitMinutes = CalculateMockTimeLimitMinutes(totalQuestions);
+
         // 2. Classify subtopics into weakness tiers
         var perfBySubTopic = performances.ToDictionary(p => p.SubTopicId);
         var subTopicTiers  = ClassifySubTopicTiers(pool, perfBySubTopic);
+        var hasMeasuredProgress = performances.Any(p => p.TotalAttempts >= MinAttemptsForTier);
 
         // 3. Target question counts per tier
-        var easyCount   = (int)Math.Round(TotalQuestions * 0.40);
-        var weakCount   = (int)Math.Round(TotalQuestions * 0.30);
-        var avgCount    = (int)Math.Round(TotalQuestions * 0.20);
-        var unknownCount = TotalQuestions - easyCount - weakCount - avgCount;
+        var easyCount   = (int)Math.Round(totalQuestions * 0.40);
+        var weakCount   = (int)Math.Round(totalQuestions * 0.30);
+        var avgCount    = (int)Math.Round(totalQuestions * 0.20);
+        var unknownCount = totalQuestions - easyCount - weakCount - avgCount;
 
         var targets = new Dictionary<WeaknessTier, int>
         {
@@ -72,33 +69,40 @@ public sealed class GeneratePersonalizedExamCommandHandler(
         var selected = new List<Guid>();
         var rng      = new Random();
 
-        foreach (var (tier, totalCount) in targets)
+        if (hasMeasuredProgress)
         {
-            if (totalCount == 0) continue;
+            foreach (var (tier, totalCount) in targets)
+            {
+                if (totalCount == 0) continue;
 
-            var mix = difficultyMix[tier];
-            int easyNeed   = (int)Math.Round(totalCount * mix.Easy);
-            int mediumNeed = (int)Math.Round(totalCount * mix.Medium);
-            int hardNeed   = totalCount - easyNeed - mediumNeed;
+                var mix = difficultyMix[tier];
+                int easyNeed   = (int)Math.Round(totalCount * mix.Easy);
+                int mediumNeed = (int)Math.Round(totalCount * mix.Medium);
+                int hardNeed   = totalCount - easyNeed - mediumNeed;
 
-            PickFromPool(poolIndex, selected, tier, SystemDifficultyLevel.Easy,   easyNeed,   pool, subTopicTiers, recentQuestionIds, rng);
-            PickFromPool(poolIndex, selected, tier, SystemDifficultyLevel.Medium, mediumNeed, pool, subTopicTiers, recentQuestionIds, rng);
-            PickFromPool(poolIndex, selected, tier, SystemDifficultyLevel.Hard,   hardNeed,   pool, subTopicTiers, recentQuestionIds, rng);
+                PickFromPool(poolIndex, selected, tier, SystemDifficultyLevel.Easy,   easyNeed,   pool, subTopicTiers, rng);
+                PickFromPool(poolIndex, selected, tier, SystemDifficultyLevel.Medium, mediumNeed, pool, subTopicTiers, rng);
+                PickFromPool(poolIndex, selected, tier, SystemDifficultyLevel.Hard,   hardNeed,   pool, subTopicTiers, rng);
+            }
+        }
+        else
+        {
+            selected.AddRange(SelectBalancedDiagnosticQuestions(pool, recentQuestionIds, totalQuestions, rng));
         }
 
         // 7. Final fallback — fill remaining from any unseen questions
-        if (selected.Count < TotalQuestions)
+        if (selected.Count < totalQuestions)
         {
             var alreadySelected = selected.ToHashSet();
             var extras = pool
                 .Where(q => !alreadySelected.Contains(q.QuestionId))
                 .OrderBy(_ => rng.Next())
-                .Take(TotalQuestions - selected.Count)
+                .Take(totalQuestions - selected.Count)
                 .Select(q => q.QuestionId);
             selected.AddRange(extras);
         }
 
-        selected = [.. selected.Take(TotalQuestions)];
+        selected = [.. selected.Take(totalQuestions)];
 
         if (selected.Count == 0)
             throw new BadRequestException("Could not generate exam — insufficient questions for this subject.");
@@ -106,13 +110,13 @@ public sealed class GeneratePersonalizedExamCommandHandler(
         // 8. Shuffle final list
         selected = [.. selected.OrderBy(_ => rng.Next())];
 
-        // 9. Create personalized session (PaperId = null, IsPersonalized = true)
+        // 9. Create mock exam session (PaperId = null, Mode = MockExam)
         var session = ExamSession.Start(
             userId:         currentUser.UserId,
             paperId:        null,
             subjectId:      request.SubjectId,
-            isPractice:     false,
-            isPersonalized: true);
+            mode:           ExamMode.MockExam,
+            timeLimitMinutes: mockExamTimeLimitMinutes);
 
         await examRepo.AddAsync(session, ct);
 
@@ -157,7 +161,7 @@ public sealed class GeneratePersonalizedExamCommandHandler(
             LEFT JOIN Options o ON o.QuestionId = q.Id
             WHERE q.Id IN @QuestionIds
               AND q.IsDeleted  = 0
-            ORDER BY o.Label // <-- Added SQL order [1]
+            ORDER BY o.Label
             """,
             new { QuestionIds = selected });
 
@@ -208,7 +212,10 @@ public sealed class GeneratePersonalizedExamCommandHandler(
         return new StartSessionResultDto(
             SessionId:     session.Id,
             StartTime:     session.StartTime,
-            IsPractice:    false,
+            ServerNow:     DateTime.UtcNow,
+            ExpiresAt:     session.ExpiresAt,
+            TimeLimitMinutes: session.TimeLimitMinutes,
+            Mode:          session.Mode.ToString(),
             QuestionCount: selected.Count,
             Questions:     examQuestions);
     }
@@ -276,7 +283,6 @@ public sealed class GeneratePersonalizedExamCommandHandler(
         int needed,
         IReadOnlyList<QuestionPoolItem> pool,
         Dictionary<Guid, WeaknessTier> subTopicTiers,
-        HashSet<Guid> recentQuestionIds,
         Random rng)
     {
         if (needed <= 0) return;
@@ -321,6 +327,45 @@ public sealed class GeneratePersonalizedExamCommandHandler(
 
         selected.AddRange(diffFallback);
     }
+
+    private static List<Guid> SelectBalancedDiagnosticQuestions(
+        IReadOnlyList<QuestionPoolItem> pool,
+        HashSet<Guid> recentQuestionIds,
+        int totalQuestions,
+        Random rng)
+    {
+        var selected = new List<Guid>();
+        var topicGroups = pool
+            .GroupBy(q => q.TopicId)
+            .OrderBy(_ => rng.Next())
+            .ToList();
+
+        if (topicGroups.Count == 0) return selected;
+
+        var perTopicBase = Math.Max(1, totalQuestions / topicGroups.Count);
+        var remainder = totalQuestions % topicGroups.Count;
+
+        foreach (var topicGroup in topicGroups)
+        {
+            var needed = perTopicBase + (remainder-- > 0 ? 1 : 0);
+            var topicQuestions = topicGroup
+                .OrderBy(q => recentQuestionIds.Contains(q.QuestionId) ? 1 : 0)
+                .ThenBy(_ => rng.Next())
+                .Take(needed)
+                .Select(q => q.QuestionId)
+                .ToList();
+
+            selected.AddRange(topicQuestions);
+        }
+
+        return selected
+            .Distinct()
+            .Take(totalQuestions)
+            .ToList();
+    }
+
+    private static int CalculateMockTimeLimitMinutes(int questionCount)
+        => (int)Math.Ceiling(questionCount * 2.4);
 
     private enum WeaknessTier { VeryWeak, Weak, Average, Unknown }
 

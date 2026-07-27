@@ -1,4 +1,5 @@
 using ScholarFlow.Domain.ValueObjects;
+using ScholarFlow.Domain.Enums;
 using ScholarFlow.SharedKernel.Primitives;
 
 namespace ScholarFlow.Domain.Events;
@@ -11,5 +12,5 @@ public sealed record ExamSessionCompletedDomainEvent(
     Guid? SubjectId,
     Guid? PaperId,
     ExamScore Score,
-    bool IsPractice
+    ExamMode Mode
 ) : IDomainEvent;

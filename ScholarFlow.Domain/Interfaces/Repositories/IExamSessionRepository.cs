@@ -7,7 +7,7 @@ public interface IExamSessionRepository
     /// <summary>Load session with UserResponses + SelectedOption (for scoring in Complete()).</summary>
     Task<ExamSession?> GetByIdWithResponsesAsync(Guid sessionId, CancellationToken ct = default);
 
-    /// <summary>Check if the student already has a Completed exam-mode session for this paper.</summary>
+    /// <summary>Check if the student already has a Completed fixed-exam session for this paper.</summary>
     Task<bool> HasCompletedExamSessionAsync(Guid userId, Guid paperId, CancellationToken ct = default);
 
     /// <summary>Get a UserResponse row by session + question (for answer submit / flag).</summary>

@@ -7,13 +7,13 @@ namespace ScholarFlow.Infrastructure.Persistence.Repositories;
 public sealed class EfStreamRepository(ApplicationDbContext db) : IStreamRepository
 {
     public Task<List<AcademicStream>> GetAllAsync(CancellationToken ct = default)
-        => db.Streams.OrderBy(s => s.Name).ToListAsync(ct);
+        => db.Streams.OrderBy(s => s.NameEnglish).ToListAsync(ct);
 
     public Task<AcademicStream?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => db.Streams.FirstOrDefaultAsync(s => s.Id == id, ct);
 
     public Task<bool> ExistsByNameAsync(string name, CancellationToken ct = default)
-        => db.Streams.AnyAsync(s => s.Name == name, ct);
+        => db.Streams.AnyAsync(s => s.NameEnglish == name, ct);
 
     public async Task AddAsync(AcademicStream stream, CancellationToken ct = default)
         => await db.Streams.AddAsync(stream, ct);

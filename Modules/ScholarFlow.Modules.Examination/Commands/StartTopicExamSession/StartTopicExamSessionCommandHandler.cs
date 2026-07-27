@@ -51,7 +51,8 @@ public sealed class StartTopicExamSessionCommandHandler(
             userId:         currentUser.UserId,
             paperId:        null, 
             subjectId:      subjectId.Value,
-            isPractice:     request.IsPractice);
+            mode:           request.Mode,
+            timeLimitMinutes: request.Mode == ExamMode.Practice ? null : selectedIds.Count);
 
         await examRepo.AddAsync(session, ct);
 
@@ -128,7 +129,7 @@ public sealed class StartTopicExamSessionCommandHandler(
 
         // 6. If Practice Mode, retrieve all explanation sections in a single bulk query
         var explanationsMap = new Dictionary<Guid, Explanation>();
-        if (request.IsPractice)
+        if (request.Mode == ExamMode.Practice)
         {
             var explanationsList = await explanationRepo.GetByQuestionIdsAsync(selectedIds, ct);
             explanationsMap = explanationsList.ToDictionary(e => e.QuestionId);
@@ -145,7 +146,7 @@ public sealed class StartTopicExamSessionCommandHandler(
             Guid? correctOptionId = null;
             string? explanationText = null;
 
-            if (request.IsPractice)
+            if (request.Mode == ExamMode.Practice)
             {
                 correctOptionId = details.CorrectOptionId;
 
@@ -176,7 +177,10 @@ public sealed class StartTopicExamSessionCommandHandler(
         return new StartSessionResultDto(
             SessionId:     session.Id,
             StartTime:     session.StartTime,
-            IsPractice:    session.IsPractice,
+            ServerNow:     DateTime.UtcNow,
+            ExpiresAt:     session.ExpiresAt,
+            TimeLimitMinutes: session.TimeLimitMinutes,
+            Mode:          session.Mode.ToString(),
             QuestionCount: selectedIds.Count,
             Questions:     examQuestions);
     }

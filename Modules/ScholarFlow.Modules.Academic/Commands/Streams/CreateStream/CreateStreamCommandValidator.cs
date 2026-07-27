@@ -6,7 +6,9 @@ public sealed class CreateStreamCommandValidator : AbstractValidator<CreateStrea
 {
     public CreateStreamCommandValidator()
     {
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(100);
+        RuleFor(x => x.NameEnglish).NotEmpty().MaximumLength(100);
+        RuleFor(x => x.NameTamil).MaximumLength(100);
+        RuleFor(x => x.NameSinhala).MaximumLength(100);
         RuleFor(x => x.Description).MaximumLength(500);
     }
 }

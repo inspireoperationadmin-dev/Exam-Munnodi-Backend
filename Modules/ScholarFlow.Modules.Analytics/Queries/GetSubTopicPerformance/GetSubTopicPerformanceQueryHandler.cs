@@ -17,8 +17,8 @@ public sealed class GetSubTopicPerformanceQueryHandler(
         var rows = await conn.QueryAsync<SubTopicPerformanceDto>("""
             SELECT
                 sstp.SubTopicId,
-                st.SubTopicName,
-                t.TopicName,
+                st.NameEnglish AS SubTopicName,
+                t.NameEnglish  AS TopicName,
                 sstp.TotalAttempts,
                 sstp.CorrectCount,
                 sstp.CorrectPercentage,

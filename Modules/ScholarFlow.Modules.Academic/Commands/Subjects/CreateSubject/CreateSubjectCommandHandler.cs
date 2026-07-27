@@ -10,10 +10,16 @@ public sealed class CreateSubjectCommandHandler(ISubjectRepository repo)
 {
     public async Task<Guid> Handle(CreateSubjectCommand request, CancellationToken ct)
     {
-        if (await repo.ExistsByNameAsync(request.Name, ct))
-            throw new ConflictException($"A subject named '{request.Name}' already exists.");
+        var nameEnglish = request.NameEnglish.Trim();
 
-        var subject = Subject.Create(request.Name, request.Description);
+        if (await repo.ExistsByNameAsync(nameEnglish, ct))
+            throw new ConflictException($"A subject named '{nameEnglish}' already exists.");
+
+        var subject = Subject.Create(
+            nameEnglish,
+            request.Description,
+            NormalizeOptional(request.NameTamil),
+            NormalizeOptional(request.NameSinhala));
 
         await repo.AddAsync(subject, ct);
 
@@ -24,4 +30,7 @@ public sealed class CreateSubjectCommandHandler(ISubjectRepository repo)
 
         return subject.Id;
     }
+
+    private static string? NormalizeOptional(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

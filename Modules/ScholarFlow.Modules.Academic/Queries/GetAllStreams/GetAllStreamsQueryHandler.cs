@@ -13,10 +13,10 @@ public sealed class GetAllStreamsQueryHandler(ISqlConnectionFactory sql)
         using var conn = sql.CreateConnection();
 
         var rows = await conn.QueryAsync<StreamDto>("""
-            SELECT Id, Name, Description
+            SELECT Id, NameEnglish, NameTamil, NameSinhala, Description
             FROM Streams
             WHERE IsDeleted = 0
-            ORDER BY Name
+            ORDER BY NameEnglish
             """);
 
         return rows.AsList();

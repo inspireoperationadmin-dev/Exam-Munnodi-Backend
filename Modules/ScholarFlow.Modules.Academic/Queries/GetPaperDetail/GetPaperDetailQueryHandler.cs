@@ -18,7 +18,7 @@ public sealed class GetPaperDetailQueryHandler(ISqlConnectionFactory sql)
                 p.Id,
                 p.Title,
                 p.SubjectId,
-                s.Name           AS SubjectName,
+                s.NameEnglish    AS SubjectName,
                 p.Type,
                 p.Medium,
                 p.Year,

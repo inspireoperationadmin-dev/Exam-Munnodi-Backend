@@ -6,9 +6,12 @@ public sealed record SessionSummaryDto(
     string? PaperTitle,
     string? SubjectName,
     DateTime StartTime,
+    DateTime ServerNow,
+    DateTime? ExpiresAt,
+    int? TimeLimitMinutes,
     DateTime? EndTime,
     string Status,
-    bool IsPractice,
+    string Mode,
     decimal? Percentage,
     decimal? ObtainedMarks,
     decimal? TotalMarks);

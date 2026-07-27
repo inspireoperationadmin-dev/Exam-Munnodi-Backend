@@ -53,6 +53,7 @@ public static class DependencyInjection
         });
         services.AddScoped<IEmailService, ResendEmailService>();
         services.AddHostedService<OtpCleanupService>();
+        services.AddHostedService<ExpiredExamSessionService>();
 
         // ── Current user (reads JWT claims from HttpContext) ──────────────────
         services.AddHttpContextAccessor();

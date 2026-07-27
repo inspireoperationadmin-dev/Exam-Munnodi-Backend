@@ -7,11 +7,15 @@ public sealed class CreateTopicCommandValidator : AbstractValidator<CreateTopicC
     public CreateTopicCommandValidator()
     {
         RuleFor(x => x.SubjectId).NotEmpty();
-        RuleFor(x => x.TopicName).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.NameEnglish).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.NameTamil).MaximumLength(200);
+        RuleFor(x => x.NameSinhala).MaximumLength(200);
         RuleFor(x => x.OrderIndex).GreaterThanOrEqualTo(0);
         RuleForEach(x => x.SubTopics).ChildRules(sub =>
         {
-            sub.RuleFor(s => s.Name).NotEmpty().MaximumLength(200);
+            sub.RuleFor(s => s.NameEnglish).NotEmpty().MaximumLength(200);
+            sub.RuleFor(s => s.NameTamil).MaximumLength(200);
+            sub.RuleFor(s => s.NameSinhala).MaximumLength(200);
             sub.RuleFor(s => s.OrderIndex).GreaterThanOrEqualTo(0);
         });
     }

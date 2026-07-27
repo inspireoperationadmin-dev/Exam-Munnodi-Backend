@@ -1,8 +1,9 @@
 using MediatR;
+using ScholarFlow.Domain.Enums;
 using ScholarFlow.Modules.Examination.DTOs;
 
 namespace ScholarFlow.Modules.Examination.Commands.StartExamSession;
 
 public sealed record StartExamSessionCommand(
     Guid PaperId,
-    bool IsPractice) : IRequest<StartSessionResultDto>;
+    ExamMode Mode) : IRequest<StartSessionResultDto>;

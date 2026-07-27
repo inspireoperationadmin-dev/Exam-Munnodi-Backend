@@ -7,5 +7,8 @@ public sealed class GeneratePersonalizedExamCommandValidator : AbstractValidator
     public GeneratePersonalizedExamCommandValidator()
     {
         RuleFor(x => x.SubjectId).NotEmpty();
+        RuleFor(x => x.QuestionCount)
+            .Must(count => count is 20 or 30 or 50)
+            .WithMessage("Question count must be 20, 30, or 50.");
     }
 }

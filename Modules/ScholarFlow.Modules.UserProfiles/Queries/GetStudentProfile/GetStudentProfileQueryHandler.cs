@@ -27,12 +27,12 @@ public sealed class GetStudentProfileQueryHandler(
             Id:              profile.Id,
             UserId:          profile.UserId,
             FullName:        profile.FullName,
-            StreamName:      profile.AcademicStream?.Name,
+            StreamName:      profile.AcademicStream?.NameEnglish,
             Medium:          profile.Medium?.ToString(),
             ExamYear:        profile.ExamYear,
             IsSetupComplete: isSetupComplete,
             Subjects: profile.SubjectSelections
-                .Select(ss => new StudentSubjectDto(ss.SubjectId, ss.Subject.Name))
+                .Select(ss => new StudentSubjectDto(ss.SubjectId, ss.Subject.NameEnglish))
                 .ToList());
     }
 }

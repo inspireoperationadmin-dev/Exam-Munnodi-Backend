@@ -21,14 +21,16 @@ public class ExamSession : AggregateRoot
     public Guid? SubjectId { get; private set; }
     public DateTime StartTime { get; private set; }
     public DateTime? EndTime { get; private set; }
+    public int? TimeLimitMinutes { get; private set; }
+    public DateTime? ExpiresAt { get; private set; }
     public decimal FinalScore { get; private set; }
     public decimal ObtainedMarks { get; private set; }
     public decimal TotalMarks { get; private set; }
     public ExamSessionStatus Status { get; private set; }
-    public bool IsPractice { get; private set; }
-    public bool IsPersonalized { get; private set; }
+    public ExamMode Mode { get; private set; }
 
     public TimeSpan? Duration => EndTime.HasValue ? EndTime - StartTime : null;
+    public bool HasExpired(DateTime utcNow) => ExpiresAt.HasValue && utcNow >= ExpiresAt.Value;
 
     public ApplicationUser User { get; set; } = null!;
     public Paper? Paper { get; set; }
@@ -44,20 +46,30 @@ public class ExamSession : AggregateRoot
         Guid userId,
         Guid? paperId,
         Guid? subjectId,
-        bool isPractice,
-        bool isPersonalized = false)
-        => new()
+        ExamMode mode,
+        int? timeLimitMinutes = null)
+    {
+        if (timeLimitMinutes.HasValue && timeLimitMinutes.Value <= 0)
+            throw new DomainException("Time limit must be greater than 0 minutes.");
+
+        var startedAt = DateTime.UtcNow;
+
+        return new()
         {
             Id = Guid.NewGuid(),
             UserId = userId,
             PaperId = paperId,
             SubjectId = subjectId,
-            StartTime = DateTime.UtcNow,
+            StartTime = startedAt,
+            TimeLimitMinutes = timeLimitMinutes,
+            ExpiresAt = timeLimitMinutes.HasValue
+                ? startedAt.AddMinutes(timeLimitMinutes.Value)
+                : null,
             Status = ExamSessionStatus.InProgress,
-            IsPractice = isPractice,
-            IsPersonalized = isPersonalized,
+            Mode = mode,
             FinalScore = 0
         };
+    }
 
     // ── Domain Methods ────────────────────────────────────────────────────────
 
@@ -68,10 +80,14 @@ public class ExamSession : AggregateRoot
     /// </summary>
     public ExamScore Complete(
         IReadOnlyDictionary<Guid, decimal> marksPerQuestion,
-        IReadOnlyDictionary<Guid, Guid> correctOptionPerQuestion) // <-- Added correct options parameter [1]
+        IReadOnlyDictionary<Guid, Guid> correctOptionPerQuestion,
+        ExamSessionStatus finalStatus = ExamSessionStatus.Completed) // <-- Added correct options parameter [1]
     {
         if (Status != ExamSessionStatus.InProgress)
             throw new DomainException("Only in-progress sessions can be completed.");
+
+        if (finalStatus is not ExamSessionStatus.Completed and not ExamSessionStatus.TimedOut)
+            throw new DomainException("Invalid final status for completing an exam session.");
 
         decimal obtained = 0m;
         decimal total    = 0m;
@@ -104,7 +120,7 @@ public class ExamSession : AggregateRoot
 
         var score = ExamScore.Calculate(Math.Round(obtained, 2), total);
 
-        Status        = ExamSessionStatus.Completed;
+        Status        = finalStatus;
         EndTime       = DateTime.UtcNow;
         FinalScore    = score.Percentage;
         ObtainedMarks = score.ObtainedMarks;
@@ -112,7 +128,7 @@ public class ExamSession : AggregateRoot
 
         Raise(new ExamSessionCompletedDomainEvent(
             Guid.NewGuid(), DateTime.UtcNow,
-            Id, UserId, SubjectId, PaperId, score, IsPractice));
+            Id, UserId, SubjectId, PaperId, score, Mode));
 
         return score;
     }

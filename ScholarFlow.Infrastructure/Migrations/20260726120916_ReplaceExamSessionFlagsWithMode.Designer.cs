@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ScholarFlow.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using ScholarFlow.Infrastructure.Persistence;
 namespace ScholarFlow.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260726120916_ReplaceExamSessionFlagsWithMode")]
+    partial class ReplaceExamSessionFlagsWithMode
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -274,9 +277,6 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.Property<DateTime?>("EndTime")
                         .HasColumnType("datetime2");
 
-                    b.Property<DateTime?>("ExpiresAt")
-                        .HasColumnType("datetime2");
-
                     b.Property<decimal>("FinalScore")
                         .HasPrecision(5, 2)
                         .HasColumnType("decimal(5,2)");
@@ -304,9 +304,6 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.Property<Guid?>("SubjectId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<int?>("TimeLimitMinutes")
-                        .HasColumnType("int");
-
                     b.Property<decimal>("TotalMarks")
                         .HasPrecision(8, 2)
                         .HasColumnType("decimal(8,2)");
@@ -315,8 +312,6 @@ namespace ScholarFlow.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ExpiresAt");
 
                     b.HasIndex("Mode");
 

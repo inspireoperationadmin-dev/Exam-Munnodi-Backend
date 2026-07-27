@@ -10,4 +10,5 @@ public sealed record EndSessionResultDto(
     int WrongCount,
     int SkippedCount,
     int TimeTakenSeconds,
-    bool IsPractice);
+    string Mode,
+    string Status);

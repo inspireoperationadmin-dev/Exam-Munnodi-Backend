@@ -9,8 +9,10 @@ public class AcademicStreamConfiguration : IEntityTypeConfiguration<AcademicStre
     public void Configure(EntityTypeBuilder<AcademicStream> builder)
     {
         builder.HasKey(s => s.Id);
-        builder.Property(s => s.Name).IsRequired().HasMaxLength(100);
+        builder.Property(s => s.NameEnglish).IsRequired().HasMaxLength(100);
+        builder.Property(s => s.NameTamil).HasMaxLength(100);
+        builder.Property(s => s.NameSinhala).HasMaxLength(100);
         builder.Property(s => s.Description).HasMaxLength(500);
-        builder.HasIndex(s => s.Name).IsUnique();
+        builder.HasIndex(s => s.NameEnglish).IsUnique();
     }
 }

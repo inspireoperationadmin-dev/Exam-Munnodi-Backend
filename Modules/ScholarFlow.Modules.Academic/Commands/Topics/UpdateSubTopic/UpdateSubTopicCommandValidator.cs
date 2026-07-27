@@ -7,7 +7,9 @@ public sealed class UpdateSubTopicCommandValidator : AbstractValidator<UpdateSub
     public UpdateSubTopicCommandValidator()
     {
         RuleFor(x => x.Id).NotEmpty();
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.NameEnglish).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.NameTamil).MaximumLength(200);
+        RuleFor(x => x.NameSinhala).MaximumLength(200);
         RuleFor(x => x.OrderIndex).GreaterThanOrEqualTo(0);
     }
 }

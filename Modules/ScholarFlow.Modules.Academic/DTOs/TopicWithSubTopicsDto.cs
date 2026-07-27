@@ -2,6 +2,8 @@ namespace ScholarFlow.Modules.Academic.DTOs;
 
 public sealed record TopicWithSubTopicsDto(
     Guid Id,
-    string TopicName,
     int OrderIndex,
-    IReadOnlyList<SubTopicDto> SubTopics);
+    IReadOnlyList<SubTopicDto> SubTopics,
+    string NameEnglish,
+    string? NameTamil = null,
+    string? NameSinhala = null);

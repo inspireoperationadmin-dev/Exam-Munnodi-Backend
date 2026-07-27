@@ -9,7 +9,9 @@ public class TopicConfiguration : IEntityTypeConfiguration<Topic>
     public void Configure(EntityTypeBuilder<Topic> builder)
     {
         builder.HasKey(t => t.Id);
-        builder.Property(t => t.TopicName).IsRequired().HasMaxLength(200);
+        builder.Property(t => t.NameEnglish).IsRequired().HasMaxLength(200);
+        builder.Property(t => t.NameTamil).HasMaxLength(200);
+        builder.Property(t => t.NameSinhala).HasMaxLength(200);
         builder.Property(t => t.OrderIndex).HasDefaultValue(0);
 
         builder.HasOne(t => t.Subject)

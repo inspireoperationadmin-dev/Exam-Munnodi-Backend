@@ -4,7 +4,9 @@ namespace ScholarFlow.Domain.Entities;
 
 public class Topic : AuditableEntity
 {
-    public string TopicName { get; private set; } = string.Empty;
+    public string NameEnglish { get; private set; } = string.Empty;
+    public string? NameTamil { get; private set; }
+    public string? NameSinhala { get; private set; }
     public Guid SubjectId { get; private set; }
     public int OrderIndex { get; private set; }
 
@@ -13,12 +15,31 @@ public class Topic : AuditableEntity
 
     private Topic() { }
 
-    public static Topic Create(Guid subjectId, string topicName, int orderIndex = 0)
-        => new() { Id = Guid.NewGuid(), SubjectId = subjectId, TopicName = topicName, OrderIndex = orderIndex };
+    public static Topic Create(
+        Guid subjectId,
+        string nameEnglish,
+        int orderIndex = 0,
+        string? nameTamil = null,
+        string? nameSinhala = null)
+        => new()
+        {
+            Id = Guid.NewGuid(),
+            SubjectId = subjectId,
+            NameEnglish = nameEnglish,
+            NameTamil = nameTamil,
+            NameSinhala = nameSinhala,
+            OrderIndex = orderIndex
+        };
 
-    public void Update(string topicName, int orderIndex)
+    public void Update(
+        string nameEnglish,
+        int orderIndex,
+        string? nameTamil = null,
+        string? nameSinhala = null)
     {
-        TopicName  = topicName;
-        OrderIndex = orderIndex;
+        NameEnglish = nameEnglish;
+        NameTamil   = nameTamil;
+        NameSinhala = nameSinhala;
+        OrderIndex  = orderIndex;
     }
 }

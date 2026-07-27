@@ -22,7 +22,7 @@ public sealed class GetPapersQueryHandler(ISqlConnectionFactory sql)
             SELECT
                 p.Id,
                 p.Title,
-                ISNULL(s.Name, '') AS SubjectName,
+                ISNULL(s.NameEnglish, '') AS SubjectName,
                 p.Type,
                 p.Medium,
                 p.Year,

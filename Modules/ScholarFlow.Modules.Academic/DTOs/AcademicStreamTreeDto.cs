@@ -2,11 +2,15 @@ namespace ScholarFlow.Modules.Academic.DTOs;
 
 public sealed record AcademicStreamTreeDto(
     Guid Id,
-    string Name,
-    string? Description,
-    IReadOnlyList<SubjectTreeDto> Subjects);
+    IReadOnlyList<SubjectTreeDto> Subjects,
+    string NameEnglish,
+    string? NameTamil = null,
+    string? NameSinhala = null,
+    string? Description = null);
 
 public sealed record SubjectTreeDto(
     Guid Id,
-    string Name,
-    IReadOnlyList<TopicWithSubTopicsDto> Topics);
+    IReadOnlyList<TopicWithSubTopicsDto> Topics,
+    string NameEnglish,
+    string? NameTamil = null,
+    string? NameSinhala = null);

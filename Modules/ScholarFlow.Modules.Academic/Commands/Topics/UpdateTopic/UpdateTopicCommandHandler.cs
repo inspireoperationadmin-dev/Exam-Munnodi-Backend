@@ -12,8 +12,15 @@ public sealed class UpdateTopicCommandHandler(ITopicRepository repo)
         var topic = await repo.GetByIdAsync(request.Id, ct)
             ?? throw new NotFoundException("Topic not found.");
 
-        topic.Update(request.TopicName, request.OrderIndex);
+        topic.Update(
+            request.NameEnglish.Trim(),
+            request.OrderIndex,
+            NormalizeOptional(request.NameTamil),
+            NormalizeOptional(request.NameSinhala));
         repo.Update(topic);
         await repo.SaveChangesAsync(ct);
     }
+
+    private static string? NormalizeOptional(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

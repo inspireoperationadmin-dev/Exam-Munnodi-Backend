@@ -12,12 +12,21 @@ public sealed class UpdateStreamCommandHandler(IStreamRepository repo)
         var stream = await repo.GetByIdAsync(request.Id, ct)
             ?? throw new NotFoundException("Stream not found.");
 
-        var nameConflict = await repo.ExistsByNameAsync(request.Name, ct);
-        if (nameConflict && stream.Name != request.Name)
-            throw new ConflictException($"A stream named '{request.Name}' already exists.");
+        var nameEnglish = request.NameEnglish.Trim();
 
-        stream.Update(request.Name, request.Description);
+        var nameConflict = await repo.ExistsByNameAsync(nameEnglish, ct);
+        if (nameConflict && stream.NameEnglish != nameEnglish)
+            throw new ConflictException($"A stream named '{nameEnglish}' already exists.");
+
+        stream.Update(
+            nameEnglish,
+            request.Description,
+            NormalizeOptional(request.NameTamil),
+            NormalizeOptional(request.NameSinhala));
         repo.Update(stream);
         await repo.SaveChangesAsync(ct);
     }
+
+    private static string? NormalizeOptional(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

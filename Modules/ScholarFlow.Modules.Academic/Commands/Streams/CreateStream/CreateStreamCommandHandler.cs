@@ -10,14 +10,23 @@ public sealed class CreateStreamCommandHandler(IStreamRepository repo)
 {
     public async Task<Guid> Handle(CreateStreamCommand request, CancellationToken ct)
     {
-        if (await repo.ExistsByNameAsync(request.Name, ct))
-            throw new ConflictException($"A stream named '{request.Name}' already exists.");
+        var nameEnglish = request.NameEnglish.Trim();
 
-        var stream = AcademicStream.Create(request.Name, request.Description);
+        if (await repo.ExistsByNameAsync(nameEnglish, ct))
+            throw new ConflictException($"A stream named '{nameEnglish}' already exists.");
+
+        var stream = AcademicStream.Create(
+            nameEnglish,
+            request.Description,
+            NormalizeOptional(request.NameTamil),
+            NormalizeOptional(request.NameSinhala));
 
         await repo.AddAsync(stream, ct);
         await repo.SaveChangesAsync(ct);
 
         return stream.Id;
     }
+
+    private static string? NormalizeOptional(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

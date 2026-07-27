@@ -21,7 +21,9 @@ public sealed class GetAllSubjectsQueryHandler(ISqlConnectionFactory sql)
         var query = $"""
             SELECT
                 s.Id             AS SubjectId,
-                s.Name           AS SubjectName,
+                s.NameEnglish    AS SubjectNameEnglish,
+                s.NameTamil      AS SubjectNameTamil,
+                s.NameSinhala    AS SubjectNameSinhala,
                 s.Description    AS SubjectDescription,
                 (
                     SELECT COUNT(*)
@@ -30,7 +32,9 @@ public sealed class GetAllSubjectsQueryHandler(ISqlConnectionFactory sql)
                       AND t.IsDeleted = 0
                 ) AS TopicCount,
                 st.Id            AS StreamId,
-                st.Name          AS StreamName,
+                st.NameEnglish   AS StreamNameEnglish,
+                st.NameTamil     AS StreamNameTamil,
+                st.NameSinhala   AS StreamNameSinhala,
                 st.Description   AS StreamDescription
             FROM Subjects s
             LEFT JOIN SubjectStreams ss ON ss.SubjectId = s.Id
@@ -38,7 +42,7 @@ public sealed class GetAllSubjectsQueryHandler(ISqlConnectionFactory sql)
                                       AND st.IsDeleted = 0
             WHERE s.IsDeleted = 0
             {streamFilter}
-            ORDER BY s.Name, st.Name
+            ORDER BY s.NameEnglish, st.NameEnglish
             """;
 
         var subjectMap = new Dictionary<Guid, SubjectDetailDto>();
@@ -51,10 +55,12 @@ public sealed class GetAllSubjectsQueryHandler(ISqlConnectionFactory sql)
                 {
                     dto = new SubjectDetailDto(
                         subjectRow.SubjectId,
-                        subjectRow.SubjectName,
-                        subjectRow.SubjectDescription,
                         new List<StreamDto>(),
-                        subjectRow.TopicCount);
+                        subjectRow.TopicCount,
+                        subjectRow.SubjectNameEnglish,
+                        subjectRow.SubjectNameTamil,
+                        subjectRow.SubjectNameSinhala,
+                        subjectRow.SubjectDescription);
 
                     subjectMap[subjectRow.SubjectId] = dto;
                 }
@@ -64,7 +70,9 @@ public sealed class GetAllSubjectsQueryHandler(ISqlConnectionFactory sql)
                     ((List<StreamDto>)dto.Streams).Add(
                         new StreamDto(
                             streamRow.StreamId!.Value,
-                            streamRow.StreamName!,
+                            streamRow.StreamNameEnglish!,
+                            streamRow.StreamNameTamil,
+                            streamRow.StreamNameSinhala,
                             streamRow.StreamDescription));
                 }
 
@@ -81,7 +89,9 @@ public sealed class GetAllSubjectsQueryHandler(ISqlConnectionFactory sql)
     private sealed class SubjectRow
     {
         public Guid    SubjectId          { get; init; }
-        public string  SubjectName        { get; init; } = string.Empty;
+        public string  SubjectNameEnglish { get; init; } = string.Empty;
+        public string? SubjectNameTamil   { get; init; }
+        public string? SubjectNameSinhala { get; init; }
         public string? SubjectDescription { get; init; }
         public int     TopicCount         { get; init; }
     }
@@ -89,7 +99,9 @@ public sealed class GetAllSubjectsQueryHandler(ISqlConnectionFactory sql)
     private sealed class StreamRow
     {
         public Guid?   StreamId          { get; init; }
-        public string? StreamName        { get; init; }
+        public string? StreamNameEnglish { get; init; }
+        public string? StreamNameTamil   { get; init; }
+        public string? StreamNameSinhala { get; init; }
         public string? StreamDescription { get; init; }
     }
 }

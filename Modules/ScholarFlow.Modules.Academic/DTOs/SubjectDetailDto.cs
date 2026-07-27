@@ -2,7 +2,9 @@ namespace ScholarFlow.Modules.Academic.DTOs;
 
 public sealed record SubjectDetailDto(
     Guid Id,
-    string Name,
-    string? Description,
     IReadOnlyList<StreamDto> Streams,
-    int TopicCount);
+    int TopicCount,
+    string NameEnglish,
+    string? NameTamil = null,
+    string? NameSinhala = null,
+    string? Description = null);

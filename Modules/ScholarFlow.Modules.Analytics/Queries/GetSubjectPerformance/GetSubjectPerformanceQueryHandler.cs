@@ -18,7 +18,7 @@ public sealed class GetSubjectPerformanceQueryHandler(
             -- Primary: rows already tracked in StudentSubjectPerformances
             SELECT
                 ssp.SubjectId,
-                s.Name                      AS SubjectName,
+                s.NameEnglish               AS SubjectName,
                 ssp.TotalExams,
                 ssp.AverageExamScore        AS AverageScore,
                 ssp.BestScore,
@@ -36,7 +36,7 @@ public sealed class GetSubjectPerformanceQueryHandler(
             -- (sessions completed before the SubjectId pipeline fix)
             SELECT
                 sts.SubjectId,
-                s.Name                                                              AS SubjectName,
+                s.NameEnglish                                                       AS SubjectName,
                 COUNT(DISTINCT es_p.Id)                                             AS TotalExams,
                 ISNULL(CAST(AVG(es_p.FinalScore)  AS decimal(18,2)), 0)             AS AverageScore,
                 ISNULL(CAST(MAX(es_p.FinalScore)  AS decimal(18,2)), 0)             AS BestScore,
@@ -49,18 +49,18 @@ public sealed class GetSubjectPerformanceQueryHandler(
             FROM StudentSubTopicPerformances sts
             JOIN Subjects s ON s.Id = sts.SubjectId
             LEFT JOIN (
-                SELECT es.Id, es.FinalScore, p.SubjectId
+                SELECT es.Id, es.FinalScore, es.SubjectId
                 FROM ExamSessions es
-                JOIN Papers p ON p.Id = es.PaperId
                 WHERE es.UserId    = @UserId
                   AND es.Status    = 'Completed'
-                  AND es.IsPractice = 0
+                  AND es.Mode      = 'MockExam'
+                  AND es.SubjectId IS NOT NULL
             ) es_p ON es_p.SubjectId = sts.SubjectId
             WHERE sts.UserId = @UserId
               AND sts.SubjectId NOT IN (
                   SELECT SubjectId FROM StudentSubjectPerformances WHERE UserId = @UserId
               )
-            GROUP BY sts.SubjectId, s.Name
+            GROUP BY sts.SubjectId, s.NameEnglish
 
             ORDER BY SubjectName
             """,

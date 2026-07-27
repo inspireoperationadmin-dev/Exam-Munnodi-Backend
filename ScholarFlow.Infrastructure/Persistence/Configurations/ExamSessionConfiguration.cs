@@ -11,6 +11,9 @@ public class ExamSessionConfiguration : IEntityTypeConfiguration<ExamSession>
         builder.HasKey(es => es.Id);
 
         builder.Property(es => es.Status).HasConversion<string>().HasMaxLength(20);
+        builder.Property(es => es.Mode).HasConversion<string>().HasMaxLength(20);
+        builder.Property(es => es.TimeLimitMinutes).IsRequired(false);
+        builder.Property(es => es.ExpiresAt).IsRequired(false);
         builder.Property(es => es.FinalScore).HasPrecision(5, 2);
         builder.Property(es => es.ObtainedMarks).HasPrecision(8, 2);
         builder.Property(es => es.TotalMarks).HasPrecision(8, 2);
@@ -39,6 +42,8 @@ public class ExamSessionConfiguration : IEntityTypeConfiguration<ExamSession>
         builder.Navigation(es => es.SessionQuestions).UsePropertyAccessMode(PropertyAccessMode.Field);
 
         builder.HasIndex(es => es.UserId);
+        builder.HasIndex(es => es.Mode);
+        builder.HasIndex(es => es.ExpiresAt);
         builder.HasIndex(es => new { es.UserId, es.Status });
         builder.HasIndex(es => new { es.PaperId, es.FinalScore, es.Status });
     }

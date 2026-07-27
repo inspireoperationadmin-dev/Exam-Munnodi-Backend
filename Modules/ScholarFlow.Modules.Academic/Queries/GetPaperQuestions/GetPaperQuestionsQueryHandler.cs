@@ -20,7 +20,7 @@ public sealed class GetPaperQuestionsQueryHandler(ISqlConnectionFactory sql)
                 q.QuestionText,
                 q.QuestionImageUrl,
                 q.SubTopicId,
-                st.SubTopicName,
+                st.NameEnglish AS SubTopicName,
                 CAST(CASE WHEN e.Id IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS HasExplanation,
                 q.Marks,
                 q.ManualDifficulty,

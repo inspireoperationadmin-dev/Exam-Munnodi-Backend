@@ -27,25 +27,30 @@ public sealed class EndExamSessionCommandHandler(
         if (session.Status != ExamSessionStatus.InProgress)
             throw new BadRequestException("Session is not in progress.");
 
+        var isTimedOut = session.HasExpired(DateTime.UtcNow);
+
         // 2. Map and update the user's responses locally [1]
-        foreach (var submitted in request.SubmittedAnswers)
+        if (!isTimedOut)
         {
-            var response = session.UserResponses.FirstOrDefault(r => r.QuestionId == submitted.QuestionId);
-            if (response is null)
+            foreach (var submitted in request.SubmittedAnswers)
             {
-                continue;
-            }
+                var response = session.UserResponses.FirstOrDefault(r => r.QuestionId == submitted.QuestionId);
+                if (response is null)
+                {
+                    continue;
+                }
 
-            if (submitted.SelectedOptionId.HasValue)
-            {
-                response.SelectOption(submitted.SelectedOptionId.Value);
-            }
-            else
-            {
-                response.ClearOption();
-            }
+                if (submitted.SelectedOptionId.HasValue)
+                {
+                    response.SelectOption(submitted.SelectedOptionId.Value);
+                }
+                else
+                {
+                    response.ClearOption();
+                }
 
-            response.TimeSpentSeconds = submitted.TimeSpentSeconds;
+                response.TimeSpentSeconds = submitted.TimeSpentSeconds;
+            }
         }
 
         // 3. Query the Marks and CorrectOptionId directly from the database for all questions in this session [1]
@@ -74,7 +79,10 @@ public sealed class EndExamSessionCommandHandler(
             g => g.CorrectOptionId ?? Guid.Empty); // Fallback if no correct option is configured [1]
 
         // 5. Score using per-question marks and correct options mapping [1]
-        var score = session.Complete(marksPerQuestion, correctOptionPerQuestion);
+        var score = session.Complete(
+            marksPerQuestion,
+            correctOptionPerQuestion,
+            isTimedOut ? ExamSessionStatus.TimedOut : ExamSessionStatus.Completed);
 
         // 6. Commit all changed states atomically to Azure SQL
         await examRepo.SaveChangesAsync(ct);
@@ -96,7 +104,8 @@ public sealed class EndExamSessionCommandHandler(
             WrongCount:       wrongCount,
             SkippedCount:     skippedCount,
             TimeTakenSeconds: timeTaken,
-            IsPractice:       session.IsPractice);
+            Mode:             session.Mode.ToString(),
+            Status:           session.Status.ToString());
     }
 
     private sealed class GradingRow

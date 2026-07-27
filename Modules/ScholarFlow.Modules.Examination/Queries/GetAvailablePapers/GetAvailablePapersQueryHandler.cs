@@ -19,7 +19,7 @@ public sealed class GetAvailablePapersQueryHandler(
                 p.Id,
                 p.Title,
                 p.SubjectId,
-                s.Name          AS SubjectName,
+                s.NameEnglish   AS SubjectName,
                 p.Year,
                 p.Type,
                 p.Medium,
@@ -44,7 +44,7 @@ public sealed class GetAvailablePapersQueryHandler(
               AND (@Medium   IS NULL OR p.Medium    = @Medium)
               AND (@Year     IS NULL OR p.Year      = @Year)
             GROUP BY
-                p.Id, p.Title, p.SubjectId, s.Name,
+                p.Id, p.Title, p.SubjectId, s.NameEnglish,
                 p.Year, p.Type, p.Medium, p.Sitting,
                 p.OfficialPaperCode, p.NegativeMarkValue, p.TimeLimit
             ORDER BY p.Year DESC, p.Title
