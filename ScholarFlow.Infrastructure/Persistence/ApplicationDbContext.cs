@@ -37,6 +37,8 @@ public class ApplicationDbContext
     public DbSet<ExamSessionQuestion>          ExamSessionQuestions         { get; set; }
     public DbSet<UserResponse>                 UserResponses                { get; set; }
     public DbSet<StudentProfile>               StudentProfiles              { get; set; }
+    public DbSet<StudentStudyActivity>         StudentStudyActivities       { get; set; }
+    public DbSet<StudentNotificationPreference> StudentNotificationPreferences { get; set; }
     public DbSet<TeacherProfile>               TeacherProfiles              { get; set; }
     public DbSet<StudentSubjectSelection>      StudentSubjectSelections     { get; set; }
     public DbSet<StudentTeacherConnection>     StudentTeacherConnections    { get; set; }
@@ -44,6 +46,7 @@ public class ApplicationDbContext
     public DbSet<StudentSubjectPerformance>    StudentSubjectPerformances   { get; set; }
     public DbSet<StudentQuestionHistory>       StudentQuestionHistories     { get; set; }
     public DbSet<OtpCode>                      OtpCodes                     { get; set; }
+    public DbSet<NotificationDevice>           NotificationDevices          { get; set; }
 
     // ── Model ────────────────────────────────────────────────────────────────
 

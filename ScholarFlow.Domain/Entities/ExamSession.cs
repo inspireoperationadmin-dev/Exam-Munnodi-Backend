@@ -21,6 +21,7 @@ public class ExamSession : AggregateRoot
     public Guid? SubjectId { get; private set; }
     public DateTime StartTime { get; private set; }
     public DateTime? EndTime { get; private set; }
+    public DateTime LastActivityAt { get; private set; }
     public int? TimeLimitMinutes { get; private set; }
     public DateTime? ExpiresAt { get; private set; }
     public decimal FinalScore { get; private set; }
@@ -61,6 +62,7 @@ public class ExamSession : AggregateRoot
             PaperId = paperId,
             SubjectId = subjectId,
             StartTime = startedAt,
+            LastActivityAt = startedAt,
             TimeLimitMinutes = timeLimitMinutes,
             ExpiresAt = timeLimitMinutes.HasValue
                 ? startedAt.AddMinutes(timeLimitMinutes.Value)
@@ -120,8 +122,12 @@ public class ExamSession : AggregateRoot
 
         var score = ExamScore.Calculate(Math.Round(obtained, 2), total);
 
+        var completedAt = finalStatus == ExamSessionStatus.TimedOut && ExpiresAt.HasValue
+            ? ExpiresAt.Value
+            : DateTime.UtcNow;
+
         Status        = finalStatus;
-        EndTime       = DateTime.UtcNow;
+        EndTime       = completedAt;
         FinalScore    = score.Percentage;
         ObtainedMarks = score.ObtainedMarks;
         TotalMarks    = score.TotalMarks;
@@ -140,5 +146,13 @@ public class ExamSession : AggregateRoot
 
         Status = ExamSessionStatus.Abandoned;
         EndTime = DateTime.UtcNow;
+    }
+
+    public void Touch(DateTime utcNow)
+    {
+        if (Status == ExamSessionStatus.InProgress)
+        {
+            LastActivityAt = utcNow;
+        }
     }
 }

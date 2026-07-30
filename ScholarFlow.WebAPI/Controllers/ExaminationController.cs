@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ScholarFlow.Domain.Enums;
+using ScholarFlow.Modules.Examination.Commands.AbandonExamSession;
 using ScholarFlow.Modules.Examination.Commands.EndExamSession;
 using ScholarFlow.Modules.Examination.Commands.FlagQuestion;
 using ScholarFlow.Modules.Examination.Commands.GeneratePersonalizedExam;
@@ -9,10 +10,12 @@ using ScholarFlow.Modules.Examination.Commands.StartExamSession;
 using ScholarFlow.Modules.Examination.Commands.StartTopicExamSession; // <-- Added namespace import [1]
 using ScholarFlow.Modules.Examination.Commands.SubmitAnswer;
 using ScholarFlow.Modules.Examination.Queries.GetAvailablePapers;
+using ScholarFlow.Modules.Examination.Queries.GetActiveSession;
 using ScholarFlow.Modules.Examination.Queries.GetMySessions;
 using ScholarFlow.Modules.Examination.Queries.GetPaperQuestionsForExam;
 using ScholarFlow.Modules.Examination.Queries.GetSessionDetail;
 using ScholarFlow.Modules.Examination.Queries.GetSessionReview;
+using ScholarFlow.Modules.Examination.Queries.GetSessionResume;
 using ScholarFlow.Modules.Examination.Queries.HasCompletedTest;
 
 namespace ScholarFlow.WebAPI.Controllers;
@@ -55,6 +58,14 @@ public sealed class ExaminationController(IMediator mediator) : ControllerBase
     public async Task<IActionResult> GeneratePersonalizedExam([FromBody] GeneratePersonalizedExamCommand command, CancellationToken ct)
         => Ok(await mediator.Send(command, ct));
 
+    [HttpGet("sessions/active")]
+    public async Task<IActionResult> GetActiveSession([FromQuery] Guid? subjectId, CancellationToken ct)
+        => Ok(await mediator.Send(new GetActiveSessionQuery(subjectId), ct));
+
+    [HttpGet("sessions/{id:guid}/resume")]
+    public async Task<IActionResult> ResumeSession(Guid id, CancellationToken ct)
+        => Ok(await mediator.Send(new GetSessionResumeQuery(id), ct));
+
     [HttpPost("sessions/{id:guid}/answer")]
     public async Task<IActionResult> SubmitAnswer(
         Guid id,
@@ -82,6 +93,13 @@ public sealed class ExaminationController(IMediator mediator) : ControllerBase
         [FromBody] EndExamSessionRequest request, 
         CancellationToken ct)
         => Ok(await mediator.Send(new EndExamSessionCommand(id, request.Answers), ct));
+
+    [HttpPost("sessions/{id:guid}/abandon")]
+    public async Task<IActionResult> AbandonSession(Guid id, CancellationToken ct)
+    {
+        await mediator.Send(new AbandonExamSessionCommand(id), ct);
+        return Ok();
+    }
 
     // ── History & Results ─────────────────────────────────────────────────────
 

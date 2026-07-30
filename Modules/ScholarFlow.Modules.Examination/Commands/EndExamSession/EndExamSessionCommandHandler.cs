@@ -24,6 +24,9 @@ public sealed class EndExamSessionCommandHandler(
         if (session.UserId != currentUser.UserId)
             throw new ForbiddenException("Access denied.");
 
+        if (session.Status is ExamSessionStatus.Completed or ExamSessionStatus.TimedOut)
+            return BuildResult(session);
+
         if (session.Status != ExamSessionStatus.InProgress)
             throw new BadRequestException("Session is not in progress.");
 
@@ -87,19 +90,24 @@ public sealed class EndExamSessionCommandHandler(
         // 6. Commit all changed states atomically to Azure SQL
         await examRepo.SaveChangesAsync(ct);
 
+        return BuildResult(session);
+    }
+
+    private static EndSessionResultDto BuildResult(ScholarFlow.Domain.Entities.ExamSession session)
+    {
         int correctCount = session.UserResponses.Count(r => r.IsCorrect);
         int skippedCount = session.UserResponses.Count(r => !r.SelectedOptionId.HasValue);
         int wrongCount   = session.UserResponses.Count - correctCount - skippedCount;
         int timeTaken    = session.Duration.HasValue
-            ? (int)session.Duration.Value.TotalSeconds
+            ? Math.Max(0, (int)session.Duration.Value.TotalSeconds)
             : 0;
 
         return new EndSessionResultDto(
             SessionId:        session.Id,
-            ObtainedMarks:    score.ObtainedMarks,
-            TotalMarks:       score.TotalMarks,
-            Percentage:       score.Percentage,
-            IsPassing:        score.IsPassing(),
+            ObtainedMarks:    session.ObtainedMarks,
+            TotalMarks:       session.TotalMarks,
+            Percentage:       session.FinalScore,
+            IsPassing:        session.FinalScore >= 40,
             CorrectCount:     correctCount,
             WrongCount:       wrongCount,
             SkippedCount:     skippedCount,

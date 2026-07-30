@@ -9,6 +9,7 @@ using ScholarFlow.Modules.Academic;
 using ScholarFlow.Modules.Analytics;
 using ScholarFlow.Modules.Examination;
 using ScholarFlow.Modules.Identity;
+using ScholarFlow.Modules.Notifications;
 using ScholarFlow.Modules.UserProfiles;
 using ScholarFlow.WebAPI.Filters;
 using ScholarFlow.WebAPI.Infrastructure;
@@ -42,6 +43,7 @@ builder.Services.AddUserProfilesModule();
 builder.Services.AddAcademicModule();
 builder.Services.AddExaminationModule();
 builder.Services.AddAnalyticsModule();
+builder.Services.AddNotificationsModule();
 
 // ── JWT Authentication ────────────────────────────────────────────────────────
 builder.Services
@@ -81,6 +83,7 @@ builder.Services.AddControllers(options =>
         // Keep enum values as strings (e.g. "Student" not 0)
         options.JsonSerializerOptions.Converters.Add(
             new System.Text.Json.Serialization.JsonStringEnumConverter());
+        options.JsonSerializerOptions.Converters.Add(new UtcDateTimeJsonConverter());
     });
 
 builder.Services.AddOpenApi(options =>

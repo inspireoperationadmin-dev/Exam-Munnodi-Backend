@@ -281,6 +281,9 @@ namespace ScholarFlow.Infrastructure.Migrations
                         .HasPrecision(5, 2)
                         .HasColumnType("decimal(5,2)");
 
+                    b.Property<DateTime>("LastActivityAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Mode")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -317,6 +320,8 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("LastActivityAt");
 
                     b.HasIndex("Mode");
 
@@ -410,6 +415,97 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.HasIndex("ExplanationId", "OrderIndex");
 
                     b.ToTable("ExplanationSections");
+                });
+
+            modelBuilder.Entity("ScholarFlow.Domain.Entities.NotificationDevice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AppVersion")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Auth")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeviceName")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Endpoint")
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)");
+
+                    b.Property<string>("EndpointHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("P256dh")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("PushToken")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("PushTokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EndpointHash")
+                        .IsUnique()
+                        .HasFilter("[EndpointHash] IS NOT NULL");
+
+                    b.HasIndex("PushTokenHash")
+                        .IsUnique()
+                        .HasFilter("[PushTokenHash] IS NOT NULL");
+
+                    b.HasIndex("UserId", "Platform", "Provider", "IsActive");
+
+                    b.ToTable("NotificationDevices");
                 });
 
             modelBuilder.Entity("ScholarFlow.Domain.Entities.Option", b =>
@@ -603,6 +699,52 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.ToTable("Questions");
                 });
 
+            modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentNotificationPreference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<TimeSpan>("DailyReminderTime")
+                        .HasColumnType("time");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LastDailyReminderSentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("StreakRemindersEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("StudyRemindersEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("StudentNotificationPreferences");
+                });
+
             modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentProfile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -677,6 +819,57 @@ namespace ScholarFlow.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("StudentQuestionHistories");
+                });
+
+            modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentStudyActivity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ActivityDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("QuestionCount")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("SessionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SubjectId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId")
+                        .IsUnique()
+                        .HasFilter("[SessionId] IS NOT NULL");
+
+                    b.HasIndex("SubjectId");
+
+                    b.HasIndex("UserId", "ActivityDate");
+
+                    b.ToTable("StudentStudyActivities");
                 });
 
             modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentSubTopicPerformance", b =>
@@ -1210,6 +1403,17 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.Navigation("Explanation");
                 });
 
+            modelBuilder.Entity("ScholarFlow.Domain.Entities.NotificationDevice", b =>
+                {
+                    b.HasOne("ScholarFlow.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ScholarFlow.Domain.Entities.Option", b =>
                 {
                     b.HasOne("ScholarFlow.Domain.Entities.Question", "Question")
@@ -1250,6 +1454,17 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.Navigation("SubTopic");
                 });
 
+            modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentNotificationPreference", b =>
+                {
+                    b.HasOne("ScholarFlow.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentProfile", b =>
                 {
                     b.HasOne("ScholarFlow.Domain.Entities.AcademicStream", "AcademicStream")
@@ -1277,6 +1492,31 @@ namespace ScholarFlow.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Question");
+                });
+
+            modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentStudyActivity", b =>
+                {
+                    b.HasOne("ScholarFlow.Domain.Entities.ExamSession", "Session")
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ScholarFlow.Domain.Entities.Subject", "Subject")
+                        .WithMany()
+                        .HasForeignKey("SubjectId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ScholarFlow.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Session");
+
+                    b.Navigation("Subject");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentSubTopicPerformance", b =>

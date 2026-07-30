@@ -39,16 +39,6 @@ public sealed class StartExamSessionCommandHandler(
                 throw new ForbiddenException("You do not have access to this paper.");
         }
 
-        // 3. Fixed exam mode: one completed attempt per paper.
-        if (request.Mode == ExamMode.FixedExam)
-        {
-            bool alreadyAttempted = await examRepo.HasCompletedExamSessionAsync(
-                currentUser.UserId, request.PaperId, ct);
-
-            if (alreadyAttempted)
-                throw new ConflictException("You have already completed this paper in exam mode.");
-        }
-
         // 4. Load all questions summary via Academic module public API (stores CorrectOptionId and Marks)
         var questionsSummary = await academicApi.GetQuestionsForExamAsync(request.PaperId, ct);
 

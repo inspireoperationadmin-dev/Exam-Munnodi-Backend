@@ -13,6 +13,7 @@
     <ProjectReference Include="..\Modules\ScholarFlow.Modules.Academic\ScholarFlow.Modules.Academic.csproj" />
     <ProjectReference Include="..\Modules\ScholarFlow.Modules.Examination\ScholarFlow.Modules.Examination.csproj" />
     <ProjectReference Include="..\Modules\ScholarFlow.Modules.Analytics\ScholarFlow.Modules.Analytics.csproj" />
+    <ProjectReference Include="..\Modules\ScholarFlow.Modules.Notifications\ScholarFlow.Modules.Notifications.csproj" />
     <ProjectReference Include="..\Modules\ScholarFlow.Modules.UserProfiles\ScholarFlow.Modules.UserProfiles.csproj" />
   </ItemGroup>
 

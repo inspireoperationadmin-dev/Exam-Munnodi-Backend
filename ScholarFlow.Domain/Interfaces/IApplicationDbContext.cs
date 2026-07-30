@@ -29,6 +29,8 @@ public interface IApplicationDbContext
 
     // User Profiles
     DbSet<StudentProfile> StudentProfiles { get; }
+    DbSet<StudentStudyActivity> StudentStudyActivities { get; }
+    DbSet<StudentNotificationPreference> StudentNotificationPreferences { get; }
     DbSet<TeacherProfile> TeacherProfiles { get; }
     DbSet<StudentSubjectSelection> StudentSubjectSelections { get; }
     DbSet<StudentTeacherConnection> StudentTeacherConnections { get; }
@@ -40,6 +42,9 @@ public interface IApplicationDbContext
 
     // Auth
     DbSet<OtpCode> OtpCodes { get; }
+
+    // Notifications
+    DbSet<NotificationDevice> NotificationDevices { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

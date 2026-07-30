@@ -54,6 +54,10 @@ public static class DependencyInjection
         services.AddScoped<IEmailService, ResendEmailService>();
         services.AddHostedService<OtpCleanupService>();
         services.AddHostedService<ExpiredExamSessionService>();
+        services.AddHostedService<StudyReminderService>();
+
+        services.Configure<PushNotificationSettings>(configuration.GetSection("PushNotifications"));
+        services.AddScoped<IWebPushNotificationSender, WebPushNotificationSender>();
 
         // ── Current user (reads JWT claims from HttpContext) ──────────────────
         services.AddHttpContextAccessor();

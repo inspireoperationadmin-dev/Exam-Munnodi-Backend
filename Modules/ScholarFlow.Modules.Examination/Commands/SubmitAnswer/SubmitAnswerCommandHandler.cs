@@ -46,6 +46,7 @@ public sealed class SubmitAnswerCommandHandler(
         else
             response.ClearOption();
 
+        session.Touch(DateTime.UtcNow);
         await examRepo.SaveChangesAsync(ct);
     }
 
