@@ -1,0 +1,45 @@
+name: Deploy Testing Backend
+
+on:
+  push:
+    branches:
+      - Notifications-Devices
+
+jobs:
+  deploy-testing:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore ScholarFlow.WebAPI/ScholarFlow.WebAPI.csproj
+
+      - name: Publish
+        run: dotnet publish ScholarFlow.WebAPI/ScholarFlow.WebAPI.csproj -c Release -o publish/scholarflow-test --no-restore
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.TESTING_SSH_KEY }}" > ~/.ssh/scholarflow_test_deploy
+          chmod 600 ~/.ssh/scholarflow_test_deploy
+          ssh-keyscan -H ${{ secrets.TESTING_SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: Upload publish files
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/scholarflow_test_deploy" \
+            publish/scholarflow-test/ \
+            ${{ secrets.TESTING_SERVER_USER }}@${{ secrets.TESTING_SERVER_IP }}:${{ secrets.TESTING_DEPLOY_PATH }}/
+
+      - name: Restart backend service
+        run: |
+          ssh -i ~/.ssh/scholarflow_test_deploy \
+            ${{ secrets.TESTING_SERVER_USER }}@${{ secrets.TESTING_SERVER_IP }} \
+            "systemctl restart scholarflow-test && systemctl status scholarflow-test --no-pager"
