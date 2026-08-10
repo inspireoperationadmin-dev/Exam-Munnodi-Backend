@@ -32,7 +32,12 @@ public sealed class GetStudentProfileQueryHandler(
             ExamYear:        profile.ExamYear,
             IsSetupComplete: isSetupComplete,
             Subjects: profile.SubjectSelections
-                .Select(ss => new StudentSubjectDto(ss.SubjectId, ss.Subject.NameEnglish))
+                .Select(ss => new StudentSubjectDto(
+                    ss.SubjectId,
+                    ss.Subject.NameEnglish,
+                    ss.Subject.NameEnglish,
+                    ss.Subject.NameTamil,
+                    ss.Subject.NameSinhala))
                 .ToList());
     }
 }

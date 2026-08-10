@@ -2,7 +2,10 @@ namespace ScholarFlow.Modules.UserProfiles.DTOs;
 
 public sealed record StudentSubjectDto(
     Guid   Id,
-    string Name);
+    string Name,
+    string NameEnglish,
+    string? NameTamil,
+    string? NameSinhala);
 
 public sealed record StudentProfileDto(
     Guid                       Id,

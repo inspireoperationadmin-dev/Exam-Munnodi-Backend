@@ -22,7 +22,12 @@ public sealed class GetStudentProfileSummaryQueryHandler(
             StreamName: profile.AcademicStream?.NameEnglish,
             Medium:     profile.Medium?.ToString(),
             Subjects:   profile.SubjectSelections
-                .Select(ss => new StudentSubjectDto(ss.SubjectId, ss.Subject.NameEnglish))
+                .Select(ss => new StudentSubjectDto(
+                    ss.SubjectId,
+                    ss.Subject.NameEnglish,
+                    ss.Subject.NameEnglish,
+                    ss.Subject.NameTamil,
+                    ss.Subject.NameSinhala))
                 .ToList());
     }
 }
