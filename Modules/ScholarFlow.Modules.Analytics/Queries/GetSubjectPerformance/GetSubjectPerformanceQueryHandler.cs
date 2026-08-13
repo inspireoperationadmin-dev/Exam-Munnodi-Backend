@@ -15,53 +15,128 @@ public sealed class GetSubjectPerformanceQueryHandler(
         using var conn = sql.CreateConnection();
 
         var rows = await conn.QueryAsync<SubjectPerformanceDto>("""
-            -- Primary: rows already tracked in StudentSubjectPerformances
+            WITH SubjectQuestionTotals AS (
+                SELECT
+                    t.SubjectId,
+                    COUNT(q.Id) AS TotalQuestionsInSubject
+                FROM Questions q
+                JOIN SubTopics st ON st.Id = q.SubTopicId
+                JOIN Topics t ON t.Id = st.TopicId
+                WHERE q.IsDeleted = 0
+                  AND st.IsDeleted = 0
+                  AND t.IsDeleted = 0
+                GROUP BY t.SubjectId
+            ),
+            AnsweredMockResponses AS (
+                SELECT
+                    t.SubjectId,
+                    ur.QuestionId,
+                    ur.IsCorrect,
+                    ur.OrderIndex,
+                    es.StartTime,
+                    es.EndTime
+                FROM UserResponses ur
+                JOIN ExamSessions es ON es.Id = ur.SessionId
+                JOIN Questions q ON q.Id = ur.QuestionId
+                JOIN SubTopics st ON st.Id = q.SubTopicId
+                JOIN Topics t ON t.Id = st.TopicId
+                WHERE es.UserId = @UserId
+                  AND es.Mode = N'MockExam'
+                  AND es.Status IN (N'Completed', N'TimedOut')
+                  AND ur.SelectedOptionId IS NOT NULL
+                  AND q.IsDeleted = 0
+                  AND st.IsDeleted = 0
+                  AND t.IsDeleted = 0
+            ),
+            AnsweredAggregates AS (
+                SELECT
+                    SubjectId,
+                    COUNT(DISTINCT QuestionId) AS UniqueQuestionsAttempted,
+                    COUNT(*) AS TotalQuestionsAttempted,
+                    SUM(CASE WHEN IsCorrect = 1 THEN 1 ELSE 0 END) AS CorrectCount
+                FROM AnsweredMockResponses
+                GROUP BY SubjectId
+            ),
+            LatestAnswered AS (
+                SELECT
+                    SubjectId,
+                    QuestionId,
+                    IsCorrect,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY SubjectId, QuestionId
+                        ORDER BY COALESCE(EndTime, StartTime) DESC, OrderIndex DESC
+                    ) AS RowNumber
+                FROM AnsweredMockResponses
+            ),
+            MasteryAggregates AS (
+                SELECT
+                    SubjectId,
+                    SUM(CASE WHEN IsCorrect = 1 THEN 1 ELSE 0 END) AS MasteredQuestions
+                FROM LatestAnswered
+                WHERE RowNumber = 1
+                GROUP BY SubjectId
+            )
             SELECT
                 ssp.SubjectId,
-                s.NameEnglish               AS SubjectName,
+                s.NameEnglish AS SubjectName,
+                COALESCE(sqt.TotalQuestionsInSubject, 0) AS TotalQuestionsInSubject,
+                COALESCE(aa.UniqueQuestionsAttempted, 0) AS UniqueQuestionsAttempted,
+                COALESCE(ma.MasteredQuestions, 0) AS MasteredQuestions,
                 ssp.TotalExams,
-                ssp.AverageExamScore        AS AverageScore,
+                ssp.AverageExamScore AS AverageScore,
                 ssp.BestScore,
-                ssp.TotalQuestionsAttempted,
-                ssp.OverallCorrectPercentage,
+                COALESCE(aa.TotalQuestionsAttempted, ssp.TotalQuestionsAttempted) AS TotalQuestionsAttempted,
+                CAST(
+                    CASE WHEN COALESCE(aa.TotalQuestionsAttempted, 0) > 0
+                        THEN ROUND(CAST(COALESCE(aa.CorrectCount, 0) AS decimal(18, 4)) / aa.TotalQuestionsAttempted * 100, 2)
+                        ELSE ssp.OverallCorrectPercentage
+                    END AS decimal(5, 2)
+                ) AS OverallCorrectPercentage,
+                CAST(
+                    CASE WHEN COALESCE(sqt.TotalQuestionsInSubject, 0) > 0
+                        THEN ROUND(CAST(COALESCE(aa.UniqueQuestionsAttempted, 0) AS decimal(18, 4)) / sqt.TotalQuestionsInSubject * 100, 2)
+                        ELSE 0
+                    END AS decimal(5, 2)
+                ) AS CoveragePercentage,
+                CAST(
+                    CASE WHEN COALESCE(sqt.TotalQuestionsInSubject, 0) > 0
+                        THEN ROUND(CAST(COALESCE(ma.MasteredQuestions, 0) AS decimal(18, 4)) / sqt.TotalQuestionsInSubject * 100, 2)
+                        ELSE 0
+                    END AS decimal(5, 2)
+                ) AS MasteryPercentage,
+                CAST(
+                    CASE WHEN COALESCE(aa.TotalQuestionsAttempted, 0) > 0
+                        THEN ROUND(CAST(COALESCE(aa.CorrectCount, 0) AS decimal(18, 4)) / aa.TotalQuestionsAttempted * 100, 2)
+                        ELSE 0
+                    END AS decimal(5, 2)
+                ) AS AccuracyPercentage,
+                CAST(
+                    (
+                        0.35 * CASE WHEN COALESCE(sqt.TotalQuestionsInSubject, 0) > 0
+                            THEN ROUND(CAST(COALESCE(aa.UniqueQuestionsAttempted, 0) AS decimal(18, 4)) / sqt.TotalQuestionsInSubject * 100, 2)
+                            ELSE 0
+                        END
+                    ) + (
+                        0.45 * CASE WHEN COALESCE(sqt.TotalQuestionsInSubject, 0) > 0
+                            THEN ROUND(CAST(COALESCE(ma.MasteredQuestions, 0) AS decimal(18, 4)) / sqt.TotalQuestionsInSubject * 100, 2)
+                            ELSE 0
+                        END
+                    ) + (
+                        0.20 * CASE WHEN COALESCE(aa.TotalQuestionsAttempted, 0) > 0
+                            THEN ROUND(CAST(COALESCE(aa.CorrectCount, 0) AS decimal(18, 4)) / aa.TotalQuestionsAttempted * 100, 2)
+                            ELSE 0
+                        END
+                    )
+                    AS decimal(5, 2)
+                ) AS ReadinessPercentage,
                 ssp.StudyStreakDays,
                 ssp.LastStudiedAt
             FROM StudentSubjectPerformances ssp
             JOIN Subjects s ON s.Id = ssp.SubjectId
+            LEFT JOIN SubjectQuestionTotals sqt ON sqt.SubjectId = ssp.SubjectId
+            LEFT JOIN AnsweredAggregates aa ON aa.SubjectId = ssp.SubjectId
+            LEFT JOIN MasteryAggregates ma ON ma.SubjectId = ssp.SubjectId
             WHERE ssp.UserId = @UserId
-
-            UNION ALL
-
-            -- Fallback: subjects with subtopic data but no StudentSubjectPerformances row yet
-            -- (sessions completed before the SubjectId pipeline fix)
-            SELECT
-                sts.SubjectId,
-                s.NameEnglish                                                       AS SubjectName,
-                COUNT(DISTINCT es_p.Id)                                             AS TotalExams,
-                ISNULL(CAST(AVG(es_p.FinalScore)  AS decimal(18,2)), 0)             AS AverageScore,
-                ISNULL(CAST(MAX(es_p.FinalScore)  AS decimal(18,2)), 0)             AS BestScore,
-                SUM(sts.TotalAttempts)                                              AS TotalQuestionsAttempted,
-                CASE WHEN SUM(sts.TotalAttempts) > 0
-                     THEN CAST(SUM(sts.CorrectCount) * 100.0 / SUM(sts.TotalAttempts) AS decimal(18,2))
-                     ELSE 0 END                                                     AS OverallCorrectPercentage,
-                1                                                                   AS StudyStreakDays,
-                MAX(sts.LastUpdated)                                                AS LastStudiedAt
-            FROM StudentSubTopicPerformances sts
-            JOIN Subjects s ON s.Id = sts.SubjectId
-            LEFT JOIN (
-                SELECT es.Id, es.FinalScore, es.SubjectId
-                FROM ExamSessions es
-                WHERE es.UserId    = @UserId
-                  AND es.Status    = 'Completed'
-                  AND es.Mode      = 'MockExam'
-                  AND es.SubjectId IS NOT NULL
-            ) es_p ON es_p.SubjectId = sts.SubjectId
-            WHERE sts.UserId = @UserId
-              AND sts.SubjectId NOT IN (
-                  SELECT SubjectId FROM StudentSubjectPerformances WHERE UserId = @UserId
-              )
-            GROUP BY sts.SubjectId, s.NameEnglish
-
             ORDER BY SubjectName
             """,
             new { UserId = currentUser.UserId });

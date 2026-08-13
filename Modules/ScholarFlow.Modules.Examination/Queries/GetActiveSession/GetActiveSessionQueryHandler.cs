@@ -37,7 +37,7 @@ public sealed class GetActiveSessionQueryHandler(
               AND (@SubjectId IS NULL OR es.SubjectId = @SubjectId)
               AND (
                     (es.ExpiresAt IS NOT NULL AND es.ExpiresAt > @Now)
-                    OR (es.Mode = 'Practice' AND es.LastActivityAt >= @PracticeCutoff)
+                    OR (es.Mode IN ('PaperPractice', 'TopicPractice') AND es.LastActivityAt >= @PracticeCutoff)
                   )
             GROUP BY es.Id, es.Mode, es.PaperId, es.SubjectId, p.Title, s.NameEnglish,
                      es.StartTime, es.LastActivityAt, es.ExpiresAt

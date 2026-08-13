@@ -9,7 +9,10 @@ public class StudentSubTopicPerformanceConfiguration : IEntityTypeConfiguration<
     public void Configure(EntityTypeBuilder<StudentSubTopicPerformance> builder)
     {
         builder.HasKey(p => p.Id);
+        builder.Property(p => p.CoveragePercentage).HasPrecision(5, 2);
+        builder.Property(p => p.MasteryPercentage).HasPrecision(5, 2);
         builder.Property(p => p.CorrectPercentage).HasPrecision(5, 2);
+        builder.Property(p => p.HealthPercentage).HasPrecision(5, 2);
 
         builder.HasOne(p => p.SubTopic)
             .WithMany()
@@ -18,5 +21,6 @@ public class StudentSubTopicPerformanceConfiguration : IEntityTypeConfiguration<
 
         builder.HasIndex(p => new { p.UserId, p.SubTopicId }).IsUnique();
         builder.HasIndex(p => new { p.UserId, p.SubjectId, p.CorrectPercentage });
+        builder.HasIndex(p => new { p.UserId, p.SubjectId, p.HealthPercentage });
     }
 }

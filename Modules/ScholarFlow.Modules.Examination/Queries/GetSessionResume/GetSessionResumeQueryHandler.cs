@@ -35,7 +35,7 @@ public sealed class GetSessionResumeQueryHandler(
         }
 
         if (session.Status == ExamSessionStatus.InProgress
-            && session.Mode == ExamMode.Practice
+            && session.Mode.IsPracticeMode()
             && session.LastActivityAt < now.AddHours(-24))
         {
             session.Abandon();
@@ -131,7 +131,7 @@ public sealed class GetSessionResumeQueryHandler(
         }
 
         var explanationsMap = new Dictionary<Guid, Explanation>();
-        if (session.Mode == ExamMode.Practice)
+        if (session.Mode.IsPracticeMode())
         {
             var questionIds = questionsDict.Keys.ToList();
             var explanations = await explanationRepo.GetByQuestionIdsAsync(questionIds, ct);
@@ -146,7 +146,7 @@ public sealed class GetSessionResumeQueryHandler(
                 var details = item.Value;
 
                 string? explanationText = null;
-                if (session.Mode == ExamMode.Practice
+                if (session.Mode.IsPracticeMode()
                     && explanationsMap.TryGetValue(questionId, out var explanation)
                     && explanation.Sections.Any())
                 {
@@ -162,7 +162,7 @@ public sealed class GetSessionResumeQueryHandler(
                     details.Image,
                     details.Marks,
                     details.Options.OrderBy(option => option.Label).ToList(),
-                    session.Mode == ExamMode.Practice ? details.CorrectOptionId : null,
+                    session.Mode.IsPracticeMode() ? details.CorrectOptionId : null,
                     explanationText);
             })
             .ToList();

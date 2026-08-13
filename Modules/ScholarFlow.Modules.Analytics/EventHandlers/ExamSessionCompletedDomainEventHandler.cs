@@ -16,25 +16,102 @@ public sealed class ExamSessionCompletedDomainEventHandler(
 {
     public async Task Handle(ExamSessionCompletedDomainEvent notification, CancellationToken ct)
     {
-        // Only mock exam sessions feed student progress analytics.
-        if (notification.Mode != ExamMode.MockExam) return;
+        if (notification.Mode is not ExamMode.MockExam and not ExamMode.TopicExam)
+            return;
 
         var responses = await examinationApi.GetSessionResponsesAsync(notification.SessionId, ct);
         if (responses.Count == 0) return;
 
         var now = DateTime.UtcNow;
 
-        // 1. Update StudentQuestionHistory (per question)
+        if (notification.Mode == ExamMode.TopicExam)
+        {
+            await UpdateTopicProgressAsync(notification.UserId, responses, now, ct);
+            await analyticsRepo.SaveChangesAsync(ct);
+            return;
+        }
+
+        await UpdateMockQuestionHistoryAsync(notification.UserId, responses, now, ct);
+        await UpdateSubjectPerformanceAsync(notification, responses, now, ct);
+        await analyticsRepo.SaveChangesAsync(ct);
+        await UpdateSystemDifficultyAsync(notification.UserId, responses, ct);
+    }
+
+    private async Task UpdateTopicProgressAsync(
+        Guid userId,
+        IReadOnlyList<SessionResponseSummary> responses,
+        DateTime now,
+        CancellationToken ct)
+    {
+        var answeredResponses = responses
+            .Where(response => response.WasAnswered)
+            .ToList();
+
+        if (answeredResponses.Count == 0)
+            return;
+
+        foreach (var response in answeredResponses)
+        {
+            var progress = await analyticsRepo.GetTopicQuestionProgressAsync(userId, response.QuestionId, ct);
+
+            if (progress is null)
+            {
+                await analyticsRepo.AddTopicQuestionProgressAsync(new StudentTopicQuestionProgress
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = userId,
+                    QuestionId = response.QuestionId,
+                    SubjectId = response.SubjectId,
+                    TopicId = response.TopicId,
+                    SubTopicId = response.SubTopicId,
+                    TimesAttempted = 1,
+                    CorrectCount = response.IsCorrect ? 1 : 0,
+                    LastAnswerCorrect = response.IsCorrect,
+                    Status = response.IsCorrect
+                        ? QuestionProgressStatus.Mastered
+                        : QuestionProgressStatus.NeedsRevision,
+                    LastSeenAt = now
+                }, ct);
+            }
+            else
+            {
+                progress.SubjectId = response.SubjectId;
+                progress.TopicId = response.TopicId;
+                progress.SubTopicId = response.SubTopicId;
+                progress.TimesAttempted++;
+                if (response.IsCorrect) progress.CorrectCount++;
+                progress.LastAnswerCorrect = response.IsCorrect;
+                progress.Status = response.IsCorrect
+                    ? QuestionProgressStatus.Mastered
+                    : QuestionProgressStatus.NeedsRevision;
+                progress.LastSeenAt = now;
+            }
+        }
+
+        await analyticsRepo.SaveChangesAsync(ct);
+
+        foreach (var subTopicId in answeredResponses.Select(r => r.SubTopicId).Distinct())
+        {
+            await analyticsRepo.RecalculateSubTopicPerformanceAsync(userId, subTopicId, ct);
+        }
+    }
+
+    private async Task UpdateMockQuestionHistoryAsync(
+        Guid userId,
+        IReadOnlyList<SessionResponseSummary> responses,
+        DateTime now,
+        CancellationToken ct)
+    {
         foreach (var response in responses)
         {
-            var history = await analyticsRepo.GetQuestionHistoryAsync(notification.UserId, response.QuestionId, ct);
+            var history = await analyticsRepo.GetQuestionHistoryAsync(userId, response.QuestionId, ct);
 
             if (history is null)
             {
                 await analyticsRepo.AddQuestionHistoryAsync(new StudentQuestionHistory
                 {
                     Id               = Guid.NewGuid(),
-                    UserId           = notification.UserId,
+                    UserId           = userId,
                     QuestionId       = response.QuestionId,
                     TimesAttempted   = 1,
                     CorrectCount     = response.IsCorrect ? 1 : 0,
@@ -50,48 +127,14 @@ public sealed class ExamSessionCompletedDomainEventHandler(
                 history.LastSeenAt        = now;
             }
         }
+    }
 
-        // 2. Update StudentSubTopicPerformance (group by subtopic)
-        var bySubTopic = responses.GroupBy(r => r.SubTopicId);
-
-        foreach (var group in bySubTopic)
-        {
-            var subTopicId    = group.Key;
-            var attempts      = group.Count();
-            var correct       = group.Count(r => r.IsCorrect);
-            var first         = group.First();
-
-            var perf = await analyticsRepo.GetSubTopicPerformanceAsync(notification.UserId, subTopicId, ct);
-
-            if (perf is null)
-            {
-                var newTotal   = attempts;
-                var newCorrect = correct;
-                await analyticsRepo.AddSubTopicPerformanceAsync(new StudentSubTopicPerformance
-                {
-                    Id                = Guid.NewGuid(),
-                    UserId            = notification.UserId,
-                    SubTopicId        = subTopicId,
-                    TopicId           = first.TopicId,
-                    SubjectId         = first.SubjectId,
-                    TotalAttempts     = newTotal,
-                    CorrectCount      = newCorrect,
-                    CorrectPercentage = newTotal > 0 ? Math.Round((decimal)newCorrect / newTotal * 100, 2) : 0,
-                    LastUpdated       = now
-                }, ct);
-            }
-            else
-            {
-                perf.TotalAttempts += attempts;
-                perf.CorrectCount  += correct;
-                perf.CorrectPercentage = perf.TotalAttempts > 0
-                    ? Math.Round((decimal)perf.CorrectCount / perf.TotalAttempts * 100, 2)
-                    : 0;
-                perf.LastUpdated = now;
-            }
-        }
-
-        // 3. Update StudentSubjectPerformance
+    private async Task UpdateSubjectPerformanceAsync(
+        ExamSessionCompletedDomainEvent notification,
+        IReadOnlyList<SessionResponseSummary> responses,
+        DateTime now,
+        CancellationToken ct)
+    {
         // Fallback: derive SubjectId from question responses when it's missing on the session
         // (covers sessions created before the StartExamSession SubjectId fix)
         var effectiveSubjectId = notification.SubjectId
@@ -100,8 +143,9 @@ public sealed class ExamSessionCompletedDomainEventHandler(
         if (effectiveSubjectId.HasValue)
         {
             var subjectId    = effectiveSubjectId.Value;
-            var totalQ       = responses.Count;
-            var correctQ     = responses.Count(r => r.IsCorrect);
+            var answeredResponses = responses.Where(r => r.WasAnswered).ToList();
+            var totalQ       = answeredResponses.Count;
+            var correctQ     = answeredResponses.Count(r => r.IsCorrect);
             var examScore    = notification.Score.Percentage;
 
             var subjectPerf = await analyticsRepo.GetSubjectPerformanceAsync(notification.UserId, subjectId, ct);
@@ -136,9 +180,9 @@ public sealed class ExamSessionCompletedDomainEventHandler(
 
                 subjectPerf.TotalQuestionsAttempted  += totalQ;
 
-                var totalCorrect = Math.Round(
-                    subjectPerf.OverallCorrectPercentage / 100 * (subjectPerf.TotalQuestionsAttempted - totalQ))
-                    + correctQ;
+                var previousCorrect = (int)Math.Round(
+                    subjectPerf.OverallCorrectPercentage / 100 * (subjectPerf.TotalQuestionsAttempted - totalQ));
+                var totalCorrect = previousCorrect + correctQ;
                 subjectPerf.OverallCorrectPercentage = subjectPerf.TotalQuestionsAttempted > 0
                     ? Math.Round((decimal)totalCorrect / subjectPerf.TotalQuestionsAttempted * 100, 2)
                     : 0;
@@ -153,13 +197,16 @@ public sealed class ExamSessionCompletedDomainEventHandler(
                 subjectPerf.LastUpdated   = now;
             }
         }
+    }
 
-        await analyticsRepo.SaveChangesAsync(ct);
-
-        // 4. Update SystemDifficulty on each question (min 5 attempts required)
+    private async Task UpdateSystemDifficultyAsync(
+        Guid userId,
+        IReadOnlyList<SessionResponseSummary> responses,
+        CancellationToken ct)
+    {
         foreach (var response in responses)
         {
-            var history = await analyticsRepo.GetQuestionHistoryAsync(notification.UserId, response.QuestionId, ct);
+            var history = await analyticsRepo.GetQuestionHistoryAsync(userId, response.QuestionId, ct);
             if (history is null || history.TimesAttempted < 5) continue;
 
             var correctRate = history.TimesAttempted > 0

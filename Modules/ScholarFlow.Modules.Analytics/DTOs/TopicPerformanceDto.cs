@@ -1,16 +1,15 @@
 namespace ScholarFlow.Modules.Analytics.DTOs;
 
-public sealed record SubTopicPerformanceDto(
+public sealed record TopicPerformanceDto(
     Guid TopicId,
-    Guid SubTopicId,
-    string SubTopicName,
     string TopicName,
-    int TotalAttempts,
-    int CorrectCount,
+    int TotalQuestionsInTopic,
     int UniqueQuestionsAttempted,
     int MasteredQuestions,
+    int TotalAttempts,
+    int CorrectCount,
     decimal CoveragePercentage,
     decimal MasteryPercentage,
-    decimal CorrectPercentage,
+    decimal AccuracyPercentage,
     decimal HealthPercentage,
     DateTime LastUpdated);

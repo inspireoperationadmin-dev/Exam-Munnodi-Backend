@@ -34,7 +34,7 @@ public sealed class AbandonExamSessionCommandHandler(
             return;
         }
 
-        if (session.Mode == ExamMode.Practice)
+        if (session.Mode.IsPracticeMode())
             throw new BadRequestException("Practice sessions are resumable and should not be abandoned when leaving.");
 
         session.Abandon();

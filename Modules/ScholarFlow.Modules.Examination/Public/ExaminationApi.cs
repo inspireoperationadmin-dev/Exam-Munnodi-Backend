@@ -15,7 +15,8 @@ internal sealed class ExaminationApi(IApplicationDbContext db) : IExaminationApi
                 ur.Question.SubTopicId,
                 ur.Question.SubTopic.TopicId,
                 ur.Question.SubTopic.Topic.SubjectId,
-                ur.IsCorrect))
+                ur.IsCorrect,
+                ur.SelectedOptionId.HasValue))
             .ToListAsync(ct);
 
         return responses.AsReadOnly();

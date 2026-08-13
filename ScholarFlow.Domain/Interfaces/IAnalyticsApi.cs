@@ -14,9 +14,24 @@ public interface IAnalyticsApi
     /// <summary>Returns question IDs the student has seen recently (within the given days window).</summary>
     Task<HashSet<Guid>> GetRecentlySeenQuestionIdsAsync(
         Guid userId, int withinDays, CancellationToken ct = default);
+
+    /// <summary>Returns per-question history for the requested question IDs.</summary>
+    Task<IReadOnlyList<QuestionHistorySummary>> GetQuestionHistoriesAsync(
+        Guid userId, IReadOnlyCollection<Guid> questionIds, CancellationToken ct = default);
 }
 
 public sealed record SubTopicPerformanceSummary(
     Guid SubTopicId,
     int TotalAttempts,
-    decimal CorrectPercentage);
+    decimal CorrectPercentage,
+    decimal CoveragePercentage,
+    decimal MasteryPercentage,
+    decimal HealthPercentage);
+
+public sealed record QuestionHistorySummary(
+    Guid QuestionId,
+    int TimesAttempted,
+    int CorrectCount,
+    bool LastAnswerCorrect,
+    bool LastResponseWasAnswered,
+    DateTime LastSeenAt);

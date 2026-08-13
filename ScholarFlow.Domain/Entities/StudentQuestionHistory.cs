@@ -2,8 +2,8 @@ namespace ScholarFlow.Domain.Entities;
 
 /// <summary>
 /// Tracks how many times a student has seen/attempted each question.
-/// Used by the personalized exam generator to avoid repetition and
-/// prioritize weak questions.
+/// Updated from MockExam results only. Used by the personalized exam
+/// generator to avoid repetition and prioritize pending questions.
 /// </summary>
 public class StudentQuestionHistory
 {

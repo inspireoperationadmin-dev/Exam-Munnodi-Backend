@@ -39,6 +39,7 @@ public interface IApplicationDbContext
     DbSet<StudentSubTopicPerformance> StudentSubTopicPerformances { get; }
     DbSet<StudentSubjectPerformance> StudentSubjectPerformances { get; }
     DbSet<StudentQuestionHistory> StudentQuestionHistories { get; }
+    DbSet<StudentTopicQuestionProgress> StudentTopicQuestionProgresses { get; }
 
     // Auth
     DbSet<OtpCode> OtpCodes { get; }

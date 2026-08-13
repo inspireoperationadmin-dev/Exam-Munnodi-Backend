@@ -2,7 +2,7 @@ namespace ScholarFlow.Domain.Entities;
 
 /// <summary>
 /// Subject-level performance summary for a student's dashboard.
-/// Upserted after every exam. Tracks streak and rolling average score.
+/// Upserted from MockExam results only. Tracks streak and rolling average score.
 /// </summary>
 public class StudentSubjectPerformance
 {

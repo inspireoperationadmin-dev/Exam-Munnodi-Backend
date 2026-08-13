@@ -17,7 +17,7 @@ public sealed class EfExamSessionRepository(ApplicationDbContext db) : IExamSess
         => db.ExamSessions.AnyAsync(
             s => s.UserId == userId
               && s.PaperId == paperId
-              && s.Mode == ExamMode.FixedExam
+              && s.Mode == ExamMode.PaperExam
               && s.Status == ExamSessionStatus.Completed,
             ct);
 

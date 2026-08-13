@@ -16,12 +16,18 @@ public sealed class GetSubTopicPerformanceQueryHandler(
 
         var rows = await conn.QueryAsync<SubTopicPerformanceDto>("""
             SELECT
+                sstp.TopicId,
                 sstp.SubTopicId,
                 st.NameEnglish AS SubTopicName,
                 t.NameEnglish  AS TopicName,
                 sstp.TotalAttempts,
                 sstp.CorrectCount,
+                sstp.UniqueQuestionsAttempted,
+                sstp.MasteredQuestions,
+                sstp.CoveragePercentage,
+                sstp.MasteryPercentage,
                 sstp.CorrectPercentage,
+                sstp.HealthPercentage,
                 sstp.LastUpdated
             FROM StudentSubTopicPerformances sstp
             JOIN SubTopics st ON st.Id = sstp.SubTopicId

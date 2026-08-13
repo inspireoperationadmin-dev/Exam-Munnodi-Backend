@@ -2,7 +2,9 @@ namespace ScholarFlow.Domain.Enums;
 
 public enum ExamMode
 {
-    Practice = 1,
-    FixedExam = 2,
-    MockExam = 3
+    PaperPractice = 1,
+    PaperExam = 2,
+    MockExam = 3,
+    TopicExam = 4,
+    TopicPractice = 5
 }

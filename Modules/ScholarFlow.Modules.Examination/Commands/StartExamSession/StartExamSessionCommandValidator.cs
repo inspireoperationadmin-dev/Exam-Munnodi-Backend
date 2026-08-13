@@ -9,7 +9,7 @@ public sealed class StartExamSessionCommandValidator : AbstractValidator<StartEx
     {
         RuleFor(x => x.PaperId).NotEmpty();
         RuleFor(x => x.Mode)
-            .Must(mode => mode is ExamMode.Practice or ExamMode.FixedExam)
-            .WithMessage("Paper sessions support only Practice or FixedExam mode.");
+            .Must(mode => mode.IsPaperMode())
+            .WithMessage("Paper sessions support only PaperPractice or PaperExam mode.");
     }
 }

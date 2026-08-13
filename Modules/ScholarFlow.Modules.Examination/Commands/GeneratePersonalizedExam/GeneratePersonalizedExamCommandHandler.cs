@@ -19,93 +19,39 @@ public sealed class GeneratePersonalizedExamCommandHandler(
     : IRequestHandler<GeneratePersonalizedExamCommand, StartSessionResultDto>
 {
     private const int RecentDays            = 7;
-    private const int MinAttemptsForTier    = 1;
+    private const decimal WrongQuestionRatio     = 0.60m;
+    private const decimal UnvisitedQuestionRatio = 0.30m;
 
     public async Task<StartSessionResultDto> Handle(GeneratePersonalizedExamCommand request, CancellationToken ct)
     {
         // These module APIs share the request-scoped DbContext, so keep the EF calls sequential.
         var pool = await academicApi.GetQuestionPoolAsync(request.SubjectId, ct);
-        var performances = await analyticsApi.GetSubTopicPerformancesAsync(currentUser.UserId, request.SubjectId, ct);
         var recentQuestionIds = await analyticsApi.GetRecentlySeenQuestionIdsAsync(currentUser.UserId, RecentDays, ct);
+        var totalQuestions = request.QuestionCount;
 
         if (pool.Count == 0)
             throw new BadRequestException("No questions available for this subject.");
 
-        var totalQuestions = request.QuestionCount;
+        if (pool.Count < totalQuestions)
+            throw new BadRequestException("This subject doesn't have enough questions for a mock exam currently. Please try another subject or paper.");
+
+        var poolQuestionIds = pool.Select(q => q.QuestionId).ToList();
+        var histories = await analyticsApi.GetQuestionHistoriesAsync(currentUser.UserId, poolQuestionIds, ct);
+
         var mockExamTimeLimitMinutes = CalculateMockTimeLimitMinutes(totalQuestions);
 
-        // 2. Classify subtopics into weakness tiers
-        var perfBySubTopic = performances.ToDictionary(p => p.SubTopicId);
-        var subTopicTiers  = ClassifySubTopicTiers(pool, perfBySubTopic);
-        var hasMeasuredProgress = performances.Any(p => p.TotalAttempts >= MinAttemptsForTier);
+        // 2. Build adaptive mock exam mix from the student's per-question history.
+        var rng = new Random();
+        var selected = SelectAdaptiveMockQuestions(
+            pool,
+            histories,
+            recentQuestionIds,
+            totalQuestions,
+            rng);
 
-        // 3. Target question counts per tier
-        var easyCount   = (int)Math.Round(totalQuestions * 0.40);
-        var weakCount   = (int)Math.Round(totalQuestions * 0.30);
-        var avgCount    = (int)Math.Round(totalQuestions * 0.20);
-        var unknownCount = totalQuestions - easyCount - weakCount - avgCount;
-
-        var targets = new Dictionary<WeaknessTier, int>
-        {
-            [WeaknessTier.VeryWeak] = easyCount,
-            [WeaknessTier.Weak]     = weakCount,
-            [WeaknessTier.Average]  = avgCount,
-            [WeaknessTier.Unknown]  = unknownCount
-        };
-
-        // 4. Difficulty mix per tier
-        var difficultyMix = new Dictionary<WeaknessTier, (double Easy, double Medium, double Hard)>
-        {
-            [WeaknessTier.VeryWeak] = (0.40, 0.40, 0.20),
-            [WeaknessTier.Weak]     = (0.20, 0.50, 0.30),
-            [WeaknessTier.Average]  = (0.10, 0.40, 0.50),
-            [WeaknessTier.Unknown]  = (0.50, 0.50, 0.00)
-        };
-
-        // 5. Build pool index: (tier, difficulty) → list of questionIds
-        var poolIndex = BuildPoolIndex(pool, subTopicTiers, recentQuestionIds);
-
-        // 6. Select questions
-        var selected = new List<Guid>();
-        var rng      = new Random();
-
-        if (hasMeasuredProgress)
-        {
-            foreach (var (tier, totalCount) in targets)
-            {
-                if (totalCount == 0) continue;
-
-                var mix = difficultyMix[tier];
-                int easyNeed   = (int)Math.Round(totalCount * mix.Easy);
-                int mediumNeed = (int)Math.Round(totalCount * mix.Medium);
-                int hardNeed   = totalCount - easyNeed - mediumNeed;
-
-                PickFromPool(poolIndex, selected, tier, SystemDifficultyLevel.Easy,   easyNeed,   pool, subTopicTiers, rng);
-                PickFromPool(poolIndex, selected, tier, SystemDifficultyLevel.Medium, mediumNeed, pool, subTopicTiers, rng);
-                PickFromPool(poolIndex, selected, tier, SystemDifficultyLevel.Hard,   hardNeed,   pool, subTopicTiers, rng);
-            }
-        }
-        else
-        {
-            selected.AddRange(SelectBalancedDiagnosticQuestions(pool, recentQuestionIds, totalQuestions, rng));
-        }
-
-        // 7. Final fallback — fill remaining from any unseen questions
         if (selected.Count < totalQuestions)
-        {
-            var alreadySelected = selected.ToHashSet();
-            var extras = pool
-                .Where(q => !alreadySelected.Contains(q.QuestionId))
-                .OrderBy(_ => rng.Next())
-                .Take(totalQuestions - selected.Count)
-                .Select(q => q.QuestionId);
-            selected.AddRange(extras);
-        }
+            throw new BadRequestException("This subject doesn't have enough questions for a mock exam currently. Please try another subject or paper.");
 
-        selected = [.. selected.Take(totalQuestions)];
-
-        if (selected.Count == 0)
-            throw new BadRequestException("Could not generate exam — insufficient questions for this subject.");
 
         // 8. Shuffle final list
         selected = [.. selected.OrderBy(_ => rng.Next())];
@@ -222,140 +168,56 @@ public sealed class GeneratePersonalizedExamCommandHandler(
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static Dictionary<Guid, WeaknessTier> ClassifySubTopicTiers(
+    private static List<Guid> SelectAdaptiveMockQuestions(
         IReadOnlyList<QuestionPoolItem> pool,
-        Dictionary<Guid, SubTopicPerformanceSummary> perfBySubTopic)
-    {
-        var result = new Dictionary<Guid, WeaknessTier>();
-
-        foreach (var subTopicId in pool.Select(q => q.SubTopicId).Distinct())
-        {
-            if (!perfBySubTopic.TryGetValue(subTopicId, out var perf)
-                || perf.TotalAttempts < MinAttemptsForTier)
-            {
-                result[subTopicId] = WeaknessTier.Unknown;
-            }
-            else
-            {
-                result[subTopicId] = perf.CorrectPercentage switch
-                {
-                    < 40  => WeaknessTier.VeryWeak,
-                    < 60  => WeaknessTier.Weak,
-                    _     => WeaknessTier.Average
-                };
-            }
-        }
-
-        return result;
-    }
-
-    private static Dictionary<(WeaknessTier, SystemDifficultyLevel), List<Guid>> BuildPoolIndex(
-        IReadOnlyList<QuestionPoolItem> pool,
-        Dictionary<Guid, WeaknessTier> subTopicTiers,
-        HashSet<Guid> recentQuestionIds)
-    {
-        var index = new Dictionary<(WeaknessTier, SystemDifficultyLevel), List<Guid>>();
-
-        foreach (var q in pool)
-        {
-            if (recentQuestionIds.Contains(q.QuestionId)) continue;
-
-            var tier       = subTopicTiers.GetValueOrDefault(q.SubTopicId, WeaknessTier.Unknown);
-            var difficulty = q.EffectiveDifficulty;
-            var key        = (tier, difficulty);
-
-            if (!index.TryGetValue(key, out var list))
-            {
-                list = [];
-                index[key] = list;
-            }
-            list.Add(q.QuestionId);
-        }
-
-        return index;
-    }
-
-    private static void PickFromPool(
-        Dictionary<(WeaknessTier, SystemDifficultyLevel), List<Guid>> poolIndex,
-        List<Guid> selected,
-        WeaknessTier tier,
-        SystemDifficultyLevel difficulty,
-        int needed,
-        IReadOnlyList<QuestionPoolItem> pool,
-        Dictionary<Guid, WeaknessTier> subTopicTiers,
-        Random rng)
-    {
-        if (needed <= 0) return;
-
-        var selectedSet = selected.ToHashSet();
-
-        // Primary: exact tier + difficulty match
-        var candidates = poolIndex
-            .GetValueOrDefault((tier, difficulty), [])
-            .Where(id => !selectedSet.Contains(id))
-            .OrderBy(_ => rng.Next())
-            .Take(needed)
-            .ToList();
-
-        selected.AddRange(candidates);
-        needed -= candidates.Count;
-        if (needed <= 0) return;
-
-        // Fallback 1: same tier, any difficulty
-        selectedSet = selected.ToHashSet();
-        var tierFallback = pool
-            .Where(q => !selectedSet.Contains(q.QuestionId)
-                     && subTopicTiers.GetValueOrDefault(q.SubTopicId, WeaknessTier.Unknown) == tier)
-            .OrderBy(_ => rng.Next())
-            .Take(needed)
-            .Select(q => q.QuestionId)
-            .ToList();
-
-        selected.AddRange(tierFallback);
-        needed -= tierFallback.Count;
-        if (needed <= 0) return;
-
-        // Fallback 2: same difficulty, any tier (include recently seen)
-        selectedSet = selected.ToHashSet();
-        var diffFallback = pool
-            .Where(q => !selectedSet.Contains(q.QuestionId)
-                     && q.EffectiveDifficulty == difficulty)
-            .OrderBy(_ => rng.Next())
-            .Take(needed)
-            .Select(q => q.QuestionId)
-            .ToList();
-
-        selected.AddRange(diffFallback);
-    }
-
-    private static List<Guid> SelectBalancedDiagnosticQuestions(
-        IReadOnlyList<QuestionPoolItem> pool,
+        IReadOnlyList<QuestionHistorySummary> histories,
         HashSet<Guid> recentQuestionIds,
         int totalQuestions,
         Random rng)
     {
-        var selected = new List<Guid>();
-        var topicGroups = pool
-            .GroupBy(q => q.TopicId)
-            .OrderBy(_ => rng.Next())
+        var historyByQuestionId = histories.ToDictionary(h => h.QuestionId);
+
+        var wrongQuestions = pool
+            .Where(q => historyByQuestionId.TryGetValue(q.QuestionId, out var history)
+                     && history.TimesAttempted > 0
+                     && history.LastResponseWasAnswered
+                     && !history.LastAnswerCorrect)
             .ToList();
 
-        if (topicGroups.Count == 0) return selected;
+        var skippedQuestions = pool
+            .Where(q => historyByQuestionId.TryGetValue(q.QuestionId, out var history)
+                     && history.TimesAttempted > 0
+                     && !history.LastResponseWasAnswered)
+            .ToList();
 
-        var perTopicBase = Math.Max(1, totalQuestions / topicGroups.Count);
-        var remainder = totalQuestions % topicGroups.Count;
+        var unvisitedQuestions = pool
+            .Where(q => !historyByQuestionId.ContainsKey(q.QuestionId))
+            .ToList();
 
-        foreach (var topicGroup in topicGroups)
+        var correctQuestions = pool
+            .Where(q => historyByQuestionId.TryGetValue(q.QuestionId, out var history)
+                     && history.TimesAttempted > 0
+                     && history.LastAnswerCorrect)
+            .ToList();
+
+        var wrongTarget = (int)Math.Round(totalQuestions * WrongQuestionRatio, MidpointRounding.AwayFromZero);
+        var unvisitedTarget = (int)Math.Round(totalQuestions * UnvisitedQuestionRatio, MidpointRounding.AwayFromZero);
+        var correctTarget = Math.Max(0, totalQuestions - wrongTarget - unvisitedTarget);
+
+        var selected = new List<Guid>(totalQuestions);
+
+        PickDiverse(wrongQuestions, selected, wrongTarget, recentQuestionIds, rng);
+        PickDiverse(unvisitedQuestions, selected, unvisitedTarget, recentQuestionIds, rng);
+        PickDiverse(correctQuestions, selected, correctTarget, recentQuestionIds, rng);
+
+        if (selected.Count < totalQuestions)
         {
-            var needed = perTopicBase + (remainder-- > 0 ? 1 : 0);
-            var topicQuestions = topicGroup
-                .OrderBy(q => recentQuestionIds.Contains(q.QuestionId) ? 1 : 0)
-                .ThenBy(_ => rng.Next())
-                .Take(needed)
-                .Select(q => q.QuestionId)
-                .ToList();
+            FillRemaining([wrongQuestions, skippedQuestions, unvisitedQuestions, correctQuestions], selected, totalQuestions, recentQuestionIds, rng);
+        }
 
-            selected.AddRange(topicQuestions);
+        if (selected.Count < totalQuestions)
+        {
+            FillRemaining([wrongQuestions, skippedQuestions, unvisitedQuestions, correctQuestions], selected, totalQuestions, new HashSet<Guid>(), rng);
         }
 
         return selected
@@ -364,10 +226,71 @@ public sealed class GeneratePersonalizedExamCommandHandler(
             .ToList();
     }
 
+    private static void FillRemaining(
+        IReadOnlyList<IReadOnlyList<QuestionPoolItem>> buckets,
+        List<Guid> selected,
+        int totalQuestions,
+        HashSet<Guid> recentQuestionIds,
+        Random rng)
+    {
+        foreach (var bucket in buckets)
+        {
+            if (selected.Count >= totalQuestions) return;
+            PickDiverse(bucket, selected, totalQuestions - selected.Count, recentQuestionIds, rng);
+        }
+    }
+
+    private static void PickDiverse(
+        IReadOnlyList<QuestionPoolItem> source,
+        List<Guid> selected,
+        int needed,
+        HashSet<Guid> recentQuestionIds,
+        Random rng)
+    {
+        if (needed <= 0 || source.Count == 0) return;
+
+        var selectedSet = selected.ToHashSet();
+        var targetCount = selected.Count + needed;
+        var candidates = source
+            .Where(q => !selectedSet.Contains(q.QuestionId)
+                     && !recentQuestionIds.Contains(q.QuestionId))
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            candidates = source
+                .Where(q => !selectedSet.Contains(q.QuestionId))
+                .ToList();
+        }
+
+        var topicQueues = candidates
+            .GroupBy(q => q.TopicId)
+            .OrderBy(_ => rng.Next())
+            .Select(group => new Queue<QuestionPoolItem>(group
+                .OrderBy(q => q.EffectiveDifficulty)
+                .ThenBy(_ => rng.Next())))
+            .ToList();
+
+        while (selected.Count < targetCount && topicQueues.Count > 0)
+        {
+            foreach (var queue in topicQueues.ToList())
+            {
+                if (selected.Count >= targetCount)
+                    break;
+
+                if (queue.TryDequeue(out var question))
+                {
+                    selected.Add(question.QuestionId);
+                }
+
+                if (queue.Count == 0)
+                    topicQueues.Remove(queue);
+            }
+        }
+    }
+
     private static int CalculateMockTimeLimitMinutes(int questionCount)
         => (int)Math.Ceiling(questionCount * 2.4);
-
-    private enum WeaknessTier { VeryWeak, Weak, Average, Unknown }
 
     private sealed class QuestionRow
     {

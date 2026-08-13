@@ -45,6 +45,7 @@ public class ApplicationDbContext
     public DbSet<StudentSubTopicPerformance>   StudentSubTopicPerformances  { get; set; }
     public DbSet<StudentSubjectPerformance>    StudentSubjectPerformances   { get; set; }
     public DbSet<StudentQuestionHistory>       StudentQuestionHistories     { get; set; }
+    public DbSet<StudentTopicQuestionProgress> StudentTopicQuestionProgresses { get; set; }
     public DbSet<OtpCode>                      OtpCodes                     { get; set; }
     public DbSet<NotificationDevice>           NotificationDevices          { get; set; }
 

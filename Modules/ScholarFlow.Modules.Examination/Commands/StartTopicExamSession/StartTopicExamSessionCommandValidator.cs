@@ -10,7 +10,7 @@ public sealed class StartTopicExamSessionCommandValidator : AbstractValidator<St
         RuleFor(x => x.TopicId).NotEmpty();
         RuleFor(x => x.Limit).InclusiveBetween(1, 50);
         RuleFor(x => x.Mode)
-            .Must(mode => mode is ExamMode.Practice or ExamMode.FixedExam)
-            .WithMessage("Topic sessions support only Practice or FixedExam mode.");
+            .Must(mode => mode.IsTopicMode())
+            .WithMessage("Topic sessions support only TopicExam or TopicPractice mode.");
     }
 }

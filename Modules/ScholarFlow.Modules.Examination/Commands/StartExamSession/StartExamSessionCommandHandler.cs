@@ -51,7 +51,7 @@ public sealed class StartExamSessionCommandHandler(
             paperId:      request.PaperId,
             subjectId:    paper.SubjectId,
             mode:         request.Mode,
-            timeLimitMinutes: request.Mode == ExamMode.Practice ? null : paper.TimeLimit);
+            timeLimitMinutes: request.Mode == ExamMode.PaperPractice ? null : paper.TimeLimit);
 
         await examRepo.AddAsync(session, ct);
 
@@ -122,11 +122,11 @@ public sealed class StartExamSessionCommandHandler(
             }
         }
 
-        // 8. If Practice Mode, retrieve all explanation sections in a single bulk query
+        // 8. If PaperPractice mode, retrieve all explanation sections in a single bulk query
         var explanationsMap = new Dictionary<Guid, Explanation>();
         var summaryLookup = questionsSummary.ToDictionary(q => q.QuestionId);
 
-        if (request.Mode == ExamMode.Practice)
+        if (request.Mode == ExamMode.PaperPractice)
         {
             var questionIds = questionsSummary.Select(q => q.QuestionId).ToList();
             var explanationsList = await explanationRepo.GetByQuestionIdsAsync(questionIds, ct);
@@ -142,7 +142,7 @@ public sealed class StartExamSessionCommandHandler(
             Guid? correctOptionId = null;
             string? explanationText = null;
 
-            if (request.Mode == ExamMode.Practice)
+            if (request.Mode == ExamMode.PaperPractice)
             {
                 // Pull correct option safely from public API summary lookup
                 if (summaryLookup.TryGetValue(questionId, out var summary))

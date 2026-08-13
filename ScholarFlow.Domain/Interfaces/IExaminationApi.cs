@@ -19,4 +19,5 @@ public sealed record SessionResponseSummary(
     Guid SubTopicId,
     Guid TopicId,
     Guid SubjectId,
-    bool IsCorrect);
+    bool IsCorrect,
+    bool WasAnswered);
