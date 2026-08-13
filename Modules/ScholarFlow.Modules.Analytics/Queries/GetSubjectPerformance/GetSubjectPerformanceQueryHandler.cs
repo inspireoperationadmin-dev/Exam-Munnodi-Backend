@@ -78,7 +78,11 @@ public sealed class GetSubjectPerformanceQueryHandler(
             )
             SELECT
                 ssp.SubjectId,
-                s.NameEnglish AS SubjectName,
+                CASE
+                    WHEN sp.Medium = 2 THEN COALESCE(NULLIF(s.NameTamil, N''), s.NameEnglish)
+                    WHEN sp.Medium = 1 THEN COALESCE(NULLIF(s.NameSinhala, N''), s.NameEnglish)
+                    ELSE s.NameEnglish
+                END AS SubjectName,
                 COALESCE(sqt.TotalQuestionsInSubject, 0) AS TotalQuestionsInSubject,
                 COALESCE(aa.UniqueQuestionsAttempted, 0) AS UniqueQuestionsAttempted,
                 COALESCE(ma.MasteredQuestions, 0) AS MasteredQuestions,
@@ -133,6 +137,7 @@ public sealed class GetSubjectPerformanceQueryHandler(
                 ssp.LastStudiedAt
             FROM StudentSubjectPerformances ssp
             JOIN Subjects s ON s.Id = ssp.SubjectId
+            LEFT JOIN StudentProfiles sp ON sp.UserId = @UserId
             LEFT JOIN SubjectQuestionTotals sqt ON sqt.SubjectId = ssp.SubjectId
             LEFT JOIN AnsweredAggregates aa ON aa.SubjectId = ssp.SubjectId
             LEFT JOIN MasteryAggregates ma ON ma.SubjectId = ssp.SubjectId

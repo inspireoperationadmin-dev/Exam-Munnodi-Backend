@@ -30,7 +30,11 @@ public sealed class GetTopicPerformanceQueryHandler(
             )
             SELECT
                 p.TopicId,
-                t.NameEnglish AS TopicName,
+                CASE
+                    WHEN sp.Medium = 2 THEN COALESCE(NULLIF(t.NameTamil, N''), t.NameEnglish)
+                    WHEN sp.Medium = 1 THEN COALESCE(NULLIF(t.NameSinhala, N''), t.NameEnglish)
+                    ELSE t.NameEnglish
+                END AS TopicName,
                 COALESCE(tqt.TotalQuestionsInTopic, 0) AS TotalQuestionsInTopic,
                 COUNT(p.QuestionId) AS UniqueQuestionsAttempted,
                 SUM(CASE WHEN p.Status = N'Mastered' THEN 1 ELSE 0 END) AS MasteredQuestions,
@@ -63,12 +67,19 @@ public sealed class GetTopicPerformanceQueryHandler(
                 MAX(p.LastSeenAt) AS LastUpdated
             FROM StudentTopicQuestionProgresses p
             JOIN Topics t ON t.Id = p.TopicId
+            LEFT JOIN StudentProfiles sp ON sp.UserId = @UserId
             LEFT JOIN TopicQuestionTotals tqt ON tqt.TopicId = p.TopicId
             WHERE p.UserId = @UserId
               AND p.SubjectId = @SubjectId
               AND t.IsDeleted = 0
-            GROUP BY p.TopicId, t.NameEnglish, tqt.TotalQuestionsInTopic
-            ORDER BY t.NameEnglish
+            GROUP BY
+                p.TopicId,
+                t.NameEnglish,
+                t.NameTamil,
+                t.NameSinhala,
+                sp.Medium,
+                tqt.TotalQuestionsInTopic
+            ORDER BY TopicName
             """,
             new { UserId = currentUser.UserId, request.SubjectId });
 

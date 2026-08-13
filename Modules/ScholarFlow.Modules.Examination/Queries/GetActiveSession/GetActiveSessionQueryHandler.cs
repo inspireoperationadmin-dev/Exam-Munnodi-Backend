@@ -22,7 +22,14 @@ public sealed class GetActiveSessionQueryHandler(
                 es.Mode,
                 es.PaperId,
                 es.SubjectId,
-                COALESCE(p.Title, s.NameEnglish) AS Title,
+                COALESCE(
+                    p.Title,
+                    CASE
+                        WHEN sp.Medium = 2 THEN COALESCE(NULLIF(s.NameTamil, N''), s.NameEnglish)
+                        WHEN sp.Medium = 1 THEN COALESCE(NULLIF(s.NameSinhala, N''), s.NameEnglish)
+                        ELSE s.NameEnglish
+                    END
+                ) AS Title,
                 es.StartTime,
                 es.LastActivityAt,
                 es.ExpiresAt,
@@ -31,6 +38,7 @@ public sealed class GetActiveSessionQueryHandler(
             FROM ExamSessions es
             LEFT JOIN Papers p ON p.Id = es.PaperId
             LEFT JOIN Subjects s ON s.Id = es.SubjectId
+            LEFT JOIN StudentProfiles sp ON sp.UserId = @UserId
             LEFT JOIN UserResponses ur ON ur.SessionId = es.Id
             WHERE es.UserId = @UserId
               AND es.Status = 'InProgress'
@@ -39,7 +47,8 @@ public sealed class GetActiveSessionQueryHandler(
                     (es.ExpiresAt IS NOT NULL AND es.ExpiresAt > @Now)
                     OR (es.Mode IN ('PaperPractice', 'TopicPractice') AND es.LastActivityAt >= @PracticeCutoff)
                   )
-            GROUP BY es.Id, es.Mode, es.PaperId, es.SubjectId, p.Title, s.NameEnglish,
+            GROUP BY es.Id, es.Mode, es.PaperId, es.SubjectId, p.Title,
+                     s.NameEnglish, s.NameTamil, s.NameSinhala, sp.Medium,
                      es.StartTime, es.LastActivityAt, es.ExpiresAt
             ORDER BY es.LastActivityAt DESC, es.StartTime DESC
             """, new

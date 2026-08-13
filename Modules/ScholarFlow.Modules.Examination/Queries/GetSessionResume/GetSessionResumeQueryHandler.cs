@@ -173,12 +173,20 @@ public sealed class GetSessionResumeQueryHandler(
         using var conn = sql.CreateConnection();
 
         return await conn.QueryFirstOrDefaultAsync<string?>("""
-            SELECT COALESCE(p.Title, s.NameEnglish)
+            SELECT COALESCE(
+                p.Title,
+                CASE
+                    WHEN sp.Medium = 2 THEN COALESCE(NULLIF(s.NameTamil, N''), s.NameEnglish)
+                    WHEN sp.Medium = 1 THEN COALESCE(NULLIF(s.NameSinhala, N''), s.NameEnglish)
+                    ELSE s.NameEnglish
+                END
+            )
             FROM ExamSessions es
             LEFT JOIN Papers p ON p.Id = es.PaperId
             LEFT JOIN Subjects s ON s.Id = es.SubjectId
+            LEFT JOIN StudentProfiles sp ON sp.UserId = @UserId
             WHERE es.Id = @SessionId
-            """, new { SessionId = session.Id });
+            """, new { SessionId = session.Id, UserId = currentUser.UserId });
     }
 
     private async Task CompleteTimedOutAsync(ExamSession session, CancellationToken ct)

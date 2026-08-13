@@ -19,7 +19,11 @@ public sealed class GetAvailablePapersQueryHandler(
                 p.Id,
                 p.Title,
                 p.SubjectId,
-                s.NameEnglish   AS SubjectName,
+                CASE
+                    WHEN sp.Medium = 2 THEN COALESCE(NULLIF(s.NameTamil, N''), s.NameEnglish)
+                    WHEN sp.Medium = 1 THEN COALESCE(NULLIF(s.NameSinhala, N''), s.NameEnglish)
+                    ELSE s.NameEnglish
+                END AS SubjectName,
                 p.Year,
                 p.Type,
                 p.Medium,
@@ -44,7 +48,7 @@ public sealed class GetAvailablePapersQueryHandler(
               AND (@Medium   IS NULL OR p.Medium    = @Medium)
               AND (@Year     IS NULL OR p.Year      = @Year)
             GROUP BY
-                p.Id, p.Title, p.SubjectId, s.NameEnglish,
+                p.Id, p.Title, p.SubjectId, s.NameEnglish, s.NameTamil, s.NameSinhala, sp.Medium,
                 p.Year, p.Type, p.Medium, p.Sitting,
                 p.OfficialPaperCode, p.NegativeMarkValue, p.TimeLimit
             ORDER BY p.Year DESC, p.Title

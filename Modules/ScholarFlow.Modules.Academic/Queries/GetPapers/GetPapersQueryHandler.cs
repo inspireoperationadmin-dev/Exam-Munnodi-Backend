@@ -5,7 +5,9 @@ using ScholarFlow.Modules.Academic.DTOs;
 
 namespace ScholarFlow.Modules.Academic.Queries.GetPapers;
 
-public sealed class GetPapersQueryHandler(ISqlConnectionFactory sql)
+public sealed class GetPapersQueryHandler(
+    ISqlConnectionFactory sql,
+    ICurrentUser currentUser)
     : IRequestHandler<GetPapersQuery, List<PaperSummaryDto>>
 {
     public async Task<List<PaperSummaryDto>> Handle(GetPapersQuery request, CancellationToken ct)
@@ -22,7 +24,14 @@ public sealed class GetPapersQueryHandler(ISqlConnectionFactory sql)
             SELECT
                 p.Id,
                 p.Title,
-                ISNULL(s.NameEnglish, '') AS SubjectName,
+                ISNULL(
+                    CASE
+                        WHEN sp.Medium = 2 THEN COALESCE(NULLIF(s.NameTamil, N''), s.NameEnglish)
+                        WHEN sp.Medium = 1 THEN COALESCE(NULLIF(s.NameSinhala, N''), s.NameEnglish)
+                        ELSE s.NameEnglish
+                    END,
+                    ''
+                ) AS SubjectName,
                 p.Type,
                 p.Medium,
                 p.Year,
@@ -33,12 +42,14 @@ public sealed class GetPapersQueryHandler(ISqlConnectionFactory sql)
                 p.CreatedAt
             FROM Papers p
             LEFT JOIN Subjects s ON s.Id = p.SubjectId AND s.IsDeleted = 0
+            LEFT JOIN StudentProfiles sp ON sp.UserId = @UserId
             WHERE {string.Join(" AND ", where)}
             ORDER BY p.Year DESC, p.Title
             """;
 
         var rows = await conn.QueryAsync<PaperSummaryDto>(sql_, new
         {
+            UserId = currentUser.UserId,
             request.SubjectId,
             Type   = request.Type?.ToString(),
             Medium = request.Medium?.ToString(),

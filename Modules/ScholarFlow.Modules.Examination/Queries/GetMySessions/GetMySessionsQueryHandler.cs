@@ -19,7 +19,11 @@ public sealed class GetMySessionsQueryHandler(
                 es.Id           AS SessionId,
                 es.PaperId,
                 p.Title         AS PaperTitle,
-                s.NameEnglish   AS SubjectName,
+                CASE
+                    WHEN sp.Medium = 2 THEN COALESCE(NULLIF(s.NameTamil, N''), s.NameEnglish)
+                    WHEN sp.Medium = 1 THEN COALESCE(NULLIF(s.NameSinhala, N''), s.NameEnglish)
+                    ELSE s.NameEnglish
+                END AS SubjectName,
                 es.StartTime,
                 es.ExpiresAt,
                 es.TimeLimitMinutes,
@@ -31,7 +35,8 @@ public sealed class GetMySessionsQueryHandler(
                 es.TotalMarks
             FROM ExamSessions es
             LEFT JOIN Papers p  ON p.Id = es.PaperId
-            LEFT JOIN Subjects s ON s.Id = p.SubjectId
+            LEFT JOIN Subjects s ON s.Id = COALESCE(es.SubjectId, p.SubjectId)
+            LEFT JOIN StudentProfiles sp ON sp.UserId = @UserId
             WHERE es.UserId = @UserId
               AND (@PaperId IS NULL OR es.PaperId = @PaperId)
               AND (@Mode    IS NULL OR es.Mode    = @Mode)

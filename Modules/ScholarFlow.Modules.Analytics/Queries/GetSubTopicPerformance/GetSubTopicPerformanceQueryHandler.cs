@@ -18,8 +18,16 @@ public sealed class GetSubTopicPerformanceQueryHandler(
             SELECT
                 sstp.TopicId,
                 sstp.SubTopicId,
-                st.NameEnglish AS SubTopicName,
-                t.NameEnglish  AS TopicName,
+                CASE
+                    WHEN sp.Medium = 2 THEN COALESCE(NULLIF(st.NameTamil, N''), st.NameEnglish)
+                    WHEN sp.Medium = 1 THEN COALESCE(NULLIF(st.NameSinhala, N''), st.NameEnglish)
+                    ELSE st.NameEnglish
+                END AS SubTopicName,
+                CASE
+                    WHEN sp.Medium = 2 THEN COALESCE(NULLIF(t.NameTamil, N''), t.NameEnglish)
+                    WHEN sp.Medium = 1 THEN COALESCE(NULLIF(t.NameSinhala, N''), t.NameEnglish)
+                    ELSE t.NameEnglish
+                END AS TopicName,
                 sstp.TotalAttempts,
                 sstp.CorrectCount,
                 sstp.UniqueQuestionsAttempted,
@@ -32,6 +40,7 @@ public sealed class GetSubTopicPerformanceQueryHandler(
             FROM StudentSubTopicPerformances sstp
             JOIN SubTopics st ON st.Id = sstp.SubTopicId
             JOIN Topics t     ON t.Id  = sstp.TopicId
+            LEFT JOIN StudentProfiles sp ON sp.UserId = @UserId
             WHERE sstp.UserId    = @UserId
               AND sstp.SubjectId = @SubjectId
             ORDER BY sstp.CorrectPercentage ASC

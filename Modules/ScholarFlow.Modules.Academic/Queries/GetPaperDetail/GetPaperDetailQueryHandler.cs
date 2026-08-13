@@ -6,7 +6,9 @@ using ScholarFlow.SharedKernel.Exceptions;
 
 namespace ScholarFlow.Modules.Academic.Queries.GetPaperDetail;
 
-public sealed class GetPaperDetailQueryHandler(ISqlConnectionFactory sql)
+public sealed class GetPaperDetailQueryHandler(
+    ISqlConnectionFactory sql,
+    ICurrentUser currentUser)
     : IRequestHandler<GetPaperDetailQuery, PaperDetailDto>
 {
     public async Task<PaperDetailDto> Handle(GetPaperDetailQuery request, CancellationToken ct)
@@ -18,7 +20,11 @@ public sealed class GetPaperDetailQueryHandler(ISqlConnectionFactory sql)
                 p.Id,
                 p.Title,
                 p.SubjectId,
-                s.NameEnglish    AS SubjectName,
+                CASE
+                    WHEN sp.Medium = 2 THEN COALESCE(NULLIF(s.NameTamil, N''), s.NameEnglish)
+                    WHEN sp.Medium = 1 THEN COALESCE(NULLIF(s.NameSinhala, N''), s.NameEnglish)
+                    ELSE s.NameEnglish
+                END AS SubjectName,
                 p.Type,
                 p.Medium,
                 p.Year,
@@ -32,8 +38,9 @@ public sealed class GetPaperDetailQueryHandler(ISqlConnectionFactory sql)
                 p.CreatedAt
             FROM Papers p
             LEFT JOIN Subjects s ON s.Id = p.SubjectId AND s.IsDeleted = 0
+            LEFT JOIN StudentProfiles sp ON sp.UserId = @UserId
             WHERE p.Id = @Id AND p.IsDeleted = 0
-            """, new { request.Id });
+            """, new { request.Id, UserId = currentUser.UserId });
 
         return dto ?? throw new NotFoundException("Paper not found.");
     }
