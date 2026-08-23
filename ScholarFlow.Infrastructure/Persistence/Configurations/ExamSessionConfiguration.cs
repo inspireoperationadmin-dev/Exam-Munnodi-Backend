@@ -38,6 +38,12 @@ public class ExamSessionConfiguration : IEntityTypeConfiguration<ExamSession>
             .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasOne(es => es.Topic)
+            .WithMany()
+            .HasForeignKey(es => es.TopicId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // Backing fields for private collections
         builder.Navigation(es => es.UserResponses).UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Navigation(es => es.SessionQuestions).UsePropertyAccessMode(PropertyAccessMode.Field);
@@ -45,8 +51,11 @@ public class ExamSessionConfiguration : IEntityTypeConfiguration<ExamSession>
         builder.HasIndex(es => es.UserId);
         builder.HasIndex(es => es.Mode);
         builder.HasIndex(es => es.ExpiresAt);
+        builder.HasIndex(es => new { es.EndTime, es.Status });
         builder.HasIndex(es => es.LastActivityAt);
         builder.HasIndex(es => new { es.UserId, es.Status });
+        builder.HasIndex(es => new { es.UserId, es.PaperId, es.Mode, es.Status });
+        builder.HasIndex(es => new { es.UserId, es.TopicId, es.Mode, es.Status });
         builder.HasIndex(es => new { es.PaperId, es.FinalScore, es.Status });
     }
 }

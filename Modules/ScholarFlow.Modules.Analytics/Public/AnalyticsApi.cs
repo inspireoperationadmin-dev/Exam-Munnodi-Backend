@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using ScholarFlow.Domain.Enums;
 using ScholarFlow.Domain.Interfaces;
 
 namespace ScholarFlow.Modules.Analytics.Public;
@@ -28,7 +27,7 @@ internal sealed class AnalyticsApi(IApplicationDbContext db) : IAnalyticsApi
     {
         var cutoff = DateTime.UtcNow.AddDays(-withinDays);
 
-        var ids = await db.StudentQuestionHistories
+        var ids = await db.StudentQuestionProgresses
             .Where(h => h.UserId == userId && h.LastSeenAt >= cutoff)
             .Select(h => h.QuestionId)
             .ToListAsync(ct);
@@ -36,49 +35,24 @@ internal sealed class AnalyticsApi(IApplicationDbContext db) : IAnalyticsApi
         return ids.ToHashSet();
     }
 
-    public async Task<IReadOnlyList<QuestionHistorySummary>> GetQuestionHistoriesAsync(
+    public async Task<IReadOnlyList<QuestionProgressSummary>> GetQuestionProgressSummariesAsync(
         Guid userId, IReadOnlyCollection<Guid> questionIds, CancellationToken ct = default)
     {
         if (questionIds.Count == 0)
             return [];
 
-        var histories = await db.StudentQuestionHistories
+        var progressRows = await db.StudentQuestionProgresses
             .Where(h => h.UserId == userId && questionIds.Contains(h.QuestionId))
             .ToListAsync(ct);
 
-        var latestResponses = await db.UserResponses
-            .Where(r => r.Session.UserId == userId
-                     && questionIds.Contains(r.QuestionId)
-                     && r.Session.Mode == ExamMode.MockExam
-                     && (r.Session.Status == ExamSessionStatus.Completed
-                      || r.Session.Status == ExamSessionStatus.TimedOut))
-            .Select(r => new
-            {
-                r.QuestionId,
-                r.SelectedOptionId,
-                r.OrderIndex,
-                r.Session.StartTime,
-                r.Session.EndTime
-            })
-            .ToListAsync(ct);
-
-        var latestAnswerState = latestResponses
-            .GroupBy(r => r.QuestionId)
-            .ToDictionary(
-                group => group.Key,
-                group => group
-                    .OrderByDescending(r => r.EndTime ?? r.StartTime)
-                    .ThenByDescending(r => r.OrderIndex)
-                    .First()
-                    .SelectedOptionId.HasValue);
-
-        return histories
-            .Select(h => new QuestionHistorySummary(
+        return progressRows
+            .Select(h => new QuestionProgressSummary(
                 h.QuestionId,
                 h.TimesAttempted,
                 h.CorrectCount,
                 h.LastAnswerCorrect,
-                latestAnswerState.GetValueOrDefault(h.QuestionId, true),
+                h.LastResponseWasAnswered,
+                h.MasteryScore,
                 h.LastSeenAt))
             .ToList()
             .AsReadOnly();

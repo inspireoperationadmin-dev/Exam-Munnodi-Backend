@@ -44,10 +44,14 @@ public class ApplicationDbContext
     public DbSet<StudentTeacherConnection>     StudentTeacherConnections    { get; set; }
     public DbSet<StudentSubTopicPerformance>   StudentSubTopicPerformances  { get; set; }
     public DbSet<StudentSubjectPerformance>    StudentSubjectPerformances   { get; set; }
-    public DbSet<StudentQuestionHistory>       StudentQuestionHistories     { get; set; }
-    public DbSet<StudentTopicQuestionProgress> StudentTopicQuestionProgresses { get; set; }
+    public DbSet<StudentQuestionProgress>      StudentQuestionProgresses    { get; set; }
     public DbSet<OtpCode>                      OtpCodes                     { get; set; }
     public DbSet<NotificationDevice>           NotificationDevices          { get; set; }
+    public DbSet<SubscriptionPlan>             SubscriptionPlans            { get; set; }
+    public DbSet<StudentSubscription>          StudentSubscriptions         { get; set; }
+    public DbSet<SubscriptionPayment>          SubscriptionPayments         { get; set; }
+    public DbSet<StudentSubscriptionUsage>     StudentSubscriptionUsages    { get; set; }
+    public DbSet<SubscriptionPlanPriceChange>  SubscriptionPlanPriceChanges { get; set; }
 
     // ── Model ────────────────────────────────────────────────────────────────
 

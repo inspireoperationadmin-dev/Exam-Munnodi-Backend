@@ -6,9 +6,6 @@ namespace ScholarFlow.Modules.Academic.Public;
 
 internal sealed class AcademicApi(IApplicationDbContext db) : IAcademicApi
 {
-    public Task<bool> PaperExistsAsync(Guid paperId, CancellationToken ct = default)
-        => db.Papers.AnyAsync(p => p.Id == paperId, ct);
-
     public async Task<AcademicPaperSummary?> GetPaperSummaryAsync(
         Guid paperId, CancellationToken ct = default)
     {
@@ -32,7 +29,10 @@ internal sealed class AcademicApi(IApplicationDbContext db) : IAcademicApi
         Guid paperId, CancellationToken ct = default)
     {
         var questions = await db.Questions
-            .Where(q => q.PaperId == paperId && !q.IsDeleted)
+            .Where(q => q.PaperId == paperId
+                     && !q.IsDeleted
+                     && !q.Paper.IsDeleted
+                     && q.Paper.IsPublic)
             .OrderBy(q => q.OrderIndex) 
             .Select(q => new AcademicQuestionSummary(
                 q.Id,
@@ -53,6 +53,8 @@ internal sealed class AcademicApi(IApplicationDbContext db) : IAcademicApi
     {
         var items = await db.Questions
             .Where(q => !q.IsDeleted
+                     && !q.Paper.IsDeleted
+                     && q.Paper.IsPublic
                      && q.SubTopic.Topic.SubjectId == subjectId)
             .Select(q => new QuestionPoolItem(
                 q.Id,

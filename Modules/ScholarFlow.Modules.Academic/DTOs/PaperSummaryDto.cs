@@ -11,4 +11,11 @@ public sealed record PaperSummaryDto(
     int QuestionCount,
     bool IsPublic,
     int TimeLimit,
-    DateTime CreatedAt);
+    DateTime CreatedAt)
+{
+    public bool IsLocked { get; init; }
+    public bool CanPractice { get; init; }
+    public bool CanUseExamMode { get; init; }
+    public string? LockReason { get; init; }
+    public string? RequiredPlan { get; init; }
+}

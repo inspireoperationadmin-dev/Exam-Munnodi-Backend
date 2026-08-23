@@ -9,20 +9,30 @@ namespace ScholarFlow.Modules.Examination.Queries.GetSessionReview;
 
 public sealed class GetSessionReviewQueryHandler(
     ISqlConnectionFactory sql,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    ISubscriptionsApi subscriptionsApi)
     : IRequestHandler<GetSessionReviewQuery, List<SessionReviewItemDto>>
 {
     public async Task<List<SessionReviewItemDto>> Handle(GetSessionReviewQuery request, CancellationToken ct)
     {
+        await subscriptionsApi.EnsureActiveAccessAsync(currentUser.UserId, ct);
+
         using var conn = sql.CreateConnection();
 
         // Verify session ownership and Completed status
-        var sessionCheck = await conn.QuerySingleOrDefaultAsync<(Guid UserId, string Status)>("""
-            SELECT es.UserId, es.Status FROM ExamSessions es WHERE es.Id = @SessionId
+        var sessionCheck = await conn.QuerySingleOrDefaultAsync<SessionCheckRow>("""
+            SELECT
+                es.UserId,
+                es.Status,
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM UserResponses ur WHERE ur.SessionId = es.Id
+                ) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS HasRawResponses
+            FROM ExamSessions es
+            WHERE es.Id = @SessionId
             """,
             new { request.SessionId });
 
-        if (sessionCheck == default)
+        if (sessionCheck is null)
             throw new NotFoundException("Session not found.");
 
         if (sessionCheck.UserId != currentUser.UserId)
@@ -30,6 +40,9 @@ public sealed class GetSessionReviewQueryHandler(
 
         if (sessionCheck.Status != nameof(ExamSessionStatus.Completed))
             throw new BadRequestException("Review is only available after the session is completed.");
+
+        if (!sessionCheck.HasRawResponses)
+            throw new BadRequestException("Review details are available for 3 days after completing an exam.");
 
         // Load all review data in one query directly using UserResponses [1]
         var rows = await conn.QueryAsync<ReviewRow>("""
@@ -130,6 +143,11 @@ public sealed class GetSessionReviewQueryHandler(
                 Explanation:      b.Explanation))
             .ToList();
     }
+
+    private sealed record SessionCheckRow(
+        Guid UserId,
+        string Status,
+        bool HasRawResponses);
 
     private sealed class ReviewItemBuilder(
         int OrderIndex,

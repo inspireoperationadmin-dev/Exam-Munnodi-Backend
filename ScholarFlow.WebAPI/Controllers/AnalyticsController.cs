@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ScholarFlow.Domain.Enums;
 using ScholarFlow.Modules.Analytics.Queries.GetExamHistory;
+using ScholarFlow.Modules.Analytics.Queries.GetStudentProgressSummary;
 using ScholarFlow.Modules.Analytics.Queries.GetSubjectPerformance;
 using ScholarFlow.Modules.Analytics.Queries.GetSubTopicPerformance;
 using ScholarFlow.Modules.Analytics.Queries.GetTopicPerformance;
@@ -16,6 +17,10 @@ public sealed class AnalyticsController(IMediator mediator) : ControllerBase
     [HttpGet("subjects")]
     public async Task<IActionResult> GetSubjectPerformance(CancellationToken ct)
         => Ok(await mediator.Send(new GetSubjectPerformanceQuery(), ct));
+
+    [HttpGet("student-progress")]
+    public async Task<IActionResult> GetStudentProgressSummary([FromQuery] Guid? subjectId, CancellationToken ct)
+        => Ok(await mediator.Send(new GetStudentProgressSummaryQuery(subjectId), ct));
 
     [HttpGet("subjects/{subjectId:guid}/subtopics")]
     public async Task<IActionResult> GetSubTopicPerformance(Guid subjectId, CancellationToken ct)

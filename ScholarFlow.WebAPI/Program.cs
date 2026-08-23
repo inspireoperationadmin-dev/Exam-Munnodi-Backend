@@ -10,6 +10,7 @@ using ScholarFlow.Modules.Analytics;
 using ScholarFlow.Modules.Examination;
 using ScholarFlow.Modules.Identity;
 using ScholarFlow.Modules.Notifications;
+using ScholarFlow.Modules.Subscriptions;
 using ScholarFlow.Modules.UserProfiles;
 using ScholarFlow.WebAPI.Filters;
 using ScholarFlow.WebAPI.Infrastructure;
@@ -44,6 +45,7 @@ builder.Services.AddAcademicModule();
 builder.Services.AddExaminationModule();
 builder.Services.AddAnalyticsModule();
 builder.Services.AddNotificationsModule();
+builder.Services.AddSubscriptionsModule(builder.Configuration);
 
 // ── JWT Authentication ────────────────────────────────────────────────────────
 builder.Services

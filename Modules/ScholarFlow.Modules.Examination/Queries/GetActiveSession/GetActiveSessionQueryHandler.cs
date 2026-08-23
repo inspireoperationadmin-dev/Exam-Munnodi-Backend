@@ -7,11 +7,14 @@ namespace ScholarFlow.Modules.Examination.Queries.GetActiveSession;
 
 public sealed class GetActiveSessionQueryHandler(
     ICurrentUser currentUser,
-    ISqlConnectionFactory sql)
+    ISqlConnectionFactory sql,
+    ISubscriptionsApi subscriptionsApi)
     : IRequestHandler<GetActiveSessionQuery, ActiveSessionDto?>
 {
     public async Task<ActiveSessionDto?> Handle(GetActiveSessionQuery request, CancellationToken ct)
     {
+        await subscriptionsApi.EnsureActiveAccessAsync(currentUser.UserId, ct);
+
         using var conn = sql.CreateConnection();
         var now = DateTime.UtcNow;
         var practiceCutoff = now.AddHours(-24);

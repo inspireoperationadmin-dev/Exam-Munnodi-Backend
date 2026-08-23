@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ScholarFlow.Domain.Interfaces;
 using ScholarFlow.Modules.Examination.Commands.StartExamSession;
 using ScholarFlow.Modules.Examination.Public;
+using ScholarFlow.Modules.Examination.Services;
 
 namespace ScholarFlow.Modules.Examination;
 
@@ -18,6 +19,7 @@ public static class DependencyInjection
 
         // Module Public APIs — defined in Domain to avoid circular references
         services.AddScoped<IExaminationApi, ExaminationApi>();
+        services.AddScoped<IExamSessionStartPolicy, ExamSessionStartPolicy>();
 
         return services;
     }

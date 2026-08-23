@@ -1,15 +1,24 @@
 using Dapper;
 using MediatR;
+using ScholarFlow.Domain.Enums;
 using ScholarFlow.Domain.Interfaces;
 using ScholarFlow.Modules.Academic.DTOs;
+using ScholarFlow.SharedKernel.Exceptions;
 
 namespace ScholarFlow.Modules.Academic.Queries.GetExplanationByQuestionId;
 
-public sealed class GetExplanationByQuestionIdQueryHandler(ISqlConnectionFactory sql)
+public sealed class GetExplanationByQuestionIdQueryHandler(
+    ISqlConnectionFactory sql,
+    ICurrentUser currentUser)
     : IRequestHandler<GetExplanationByQuestionIdQuery, ExplanationDto?>
 {
     public async Task<ExplanationDto?> Handle(GetExplanationByQuestionIdQuery request, CancellationToken ct)
     {
+        if (currentUser.IsInRole(AppRole.Student))
+        {
+            throw new ForbiddenException("Students must use the examination review or practice endpoints.");
+        }
+
         using var conn = sql.CreateConnection();
 
         var rows = await conn.QueryAsync<ExplanationRow>("""

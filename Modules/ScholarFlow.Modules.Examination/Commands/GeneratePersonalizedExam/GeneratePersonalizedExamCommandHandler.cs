@@ -6,24 +6,28 @@ using ScholarFlow.Domain.Interfaces;
 using ScholarFlow.Domain.Interfaces.Repositories;
 using ScholarFlow.Modules.Academic.Public;
 using ScholarFlow.Modules.Examination.DTOs;
+using ScholarFlow.Modules.Examination.Services;
 using ScholarFlow.SharedKernel.Exceptions;
 
 namespace ScholarFlow.Modules.Examination.Commands.GeneratePersonalizedExam;
 
 public sealed class GeneratePersonalizedExamCommandHandler(
-    IExamSessionRepository examRepo,
     IAcademicApi           academicApi,
     IAnalyticsApi          analyticsApi,
     ISqlConnectionFactory  sql,
+    ISubscriptionsApi      subscriptionsApi,
+    IExamSessionStartPolicy sessionStartPolicy,
     ICurrentUser           currentUser)
     : IRequestHandler<GeneratePersonalizedExamCommand, StartSessionResultDto>
 {
-    private const int RecentDays            = 7;
-    private const decimal WrongQuestionRatio     = 0.60m;
+    private const int RecentDays                  = 7;
+    private const decimal NeedsPracticeRatio      = 0.60m;
     private const decimal UnvisitedQuestionRatio = 0.30m;
 
     public async Task<StartSessionResultDto> Handle(GeneratePersonalizedExamCommand request, CancellationToken ct)
     {
+        await subscriptionsApi.EnsureActiveAccessAsync(currentUser.UserId, ct);
+
         // These module APIs share the request-scoped DbContext, so keep the EF calls sequential.
         var pool = await academicApi.GetQuestionPoolAsync(request.SubjectId, ct);
         var recentQuestionIds = await analyticsApi.GetRecentlySeenQuestionIdsAsync(currentUser.UserId, RecentDays, ct);
@@ -36,15 +40,15 @@ public sealed class GeneratePersonalizedExamCommandHandler(
             throw new BadRequestException("This subject doesn't have enough questions for a mock exam currently. Please try another subject or paper.");
 
         var poolQuestionIds = pool.Select(q => q.QuestionId).ToList();
-        var histories = await analyticsApi.GetQuestionHistoriesAsync(currentUser.UserId, poolQuestionIds, ct);
+        var progressSummaries = await analyticsApi.GetQuestionProgressSummariesAsync(currentUser.UserId, poolQuestionIds, ct);
 
-        var mockExamTimeLimitMinutes = CalculateMockTimeLimitMinutes(totalQuestions);
+        var mockExamTimeLimitMinutes = ExamTimeLimitCalculator.CalculateRealPaperPacedMinutes(totalQuestions);
 
         // 2. Build adaptive mock exam mix from the student's per-question history.
         var rng = new Random();
         var selected = SelectAdaptiveMockQuestions(
             pool,
-            histories,
+            progressSummaries,
             recentQuestionIds,
             totalQuestions,
             rng);
@@ -64,30 +68,57 @@ public sealed class GeneratePersonalizedExamCommandHandler(
             mode:           ExamMode.MockExam,
             timeLimitMinutes: mockExamTimeLimitMinutes);
 
-        await examRepo.AddAsync(session, ct);
+        await sessionStartPolicy.EnsureCanStartAsync(session, request.ReplaceSessionId, ct);
 
-        // 10. Pre-populate UserResponse with direct OrderIndex mapping
-        for (int i = 0; i < selected.Count; i++)
+        var usageToken = await subscriptionsApi.ConsumeExamUsageAsync(
+            currentUser.UserId,
+            SubscriptionUsageFeature.MockExam,
+            ct);
+
+        try
         {
-            await examRepo.AddResponseAsync(new UserResponse
+            // 10. Pre-populate UserResponse with direct OrderIndex mapping
+            var responses = new List<UserResponse>(selected.Count);
+            var sessionQuestions = new List<ExamSessionQuestion>(selected.Count);
+            for (int i = 0; i < selected.Count; i++)
             {
-                Id             = Guid.NewGuid(),
-                SessionId      = session.Id,
-                QuestionId     = selected[i],
-                OrderIndex     = i + 1, 
-                ResponseStatus = ResponseStatus.Unvisited
-            }, ct);
+                responses.Add(new UserResponse
+                {
+                    Id             = Guid.NewGuid(),
+                    SessionId      = session.Id,
+                    QuestionId     = selected[i],
+                    OrderIndex     = i + 1,
+                    ResponseStatus = ResponseStatus.Unvisited
+                });
 
-            await examRepo.AddSessionQuestionAsync(new ExamSessionQuestion
-            {
-                Id         = Guid.NewGuid(),
-                SessionId  = session.Id,
-                QuestionId = selected[i],
-                OrderIndex = i + 1
-            }, ct);
+                sessionQuestions.Add(new ExamSessionQuestion
+                {
+                    Id         = Guid.NewGuid(),
+                    SessionId  = session.Id,
+                    QuestionId = selected[i],
+                    OrderIndex = i + 1
+                });
+            }
+
+            await sessionStartPolicy.PersistAsync(
+                session,
+                responses,
+                sessionQuestions,
+                request.ReplaceSessionId,
+                ct);
         }
+        catch
+        {
+            if (usageToken is not null)
+            {
+                await subscriptionsApi.ReleaseExamUsageAsync(
+                    currentUser.UserId,
+                    usageToken,
+                    CancellationToken.None);
+            }
 
-        await examRepo.SaveChangesAsync(ct);
+            throw;
+        }
 
         // 11. Fetch the shuffled question texts and option details using Dapper (Added ORDER BY) [1]
         using var conn = sql.CreateConnection();
@@ -104,9 +135,12 @@ public sealed class GeneratePersonalizedExamCommandHandler(
                 o.OptionText,
                 o.OptionImageUrl
             FROM Questions q
+            INNER JOIN Papers p ON p.Id = q.PaperId
             LEFT JOIN Options o ON o.QuestionId = q.Id
             WHERE q.Id IN @QuestionIds
               AND q.IsDeleted  = 0
+              AND p.IsDeleted = 0
+              AND p.IsPublic = 1
             ORDER BY o.Label
             """,
             new { QuestionIds = selected });
@@ -170,54 +204,48 @@ public sealed class GeneratePersonalizedExamCommandHandler(
 
     private static List<Guid> SelectAdaptiveMockQuestions(
         IReadOnlyList<QuestionPoolItem> pool,
-        IReadOnlyList<QuestionHistorySummary> histories,
+        IReadOnlyList<QuestionProgressSummary> progressSummaries,
         HashSet<Guid> recentQuestionIds,
         int totalQuestions,
         Random rng)
     {
-        var historyByQuestionId = histories.ToDictionary(h => h.QuestionId);
+        var progressByQuestionId = progressSummaries.ToDictionary(h => h.QuestionId);
 
-        var wrongQuestions = pool
-            .Where(q => historyByQuestionId.TryGetValue(q.QuestionId, out var history)
-                     && history.TimesAttempted > 0
-                     && history.LastResponseWasAnswered
-                     && !history.LastAnswerCorrect)
-            .ToList();
-
-        var skippedQuestions = pool
-            .Where(q => historyByQuestionId.TryGetValue(q.QuestionId, out var history)
-                     && history.TimesAttempted > 0
-                     && !history.LastResponseWasAnswered)
+        var needsPracticeQuestions = pool
+            .Where(q => progressByQuestionId.TryGetValue(q.QuestionId, out var history)
+                     && NeedsPractice(history))
             .ToList();
 
         var unvisitedQuestions = pool
-            .Where(q => !historyByQuestionId.ContainsKey(q.QuestionId))
+            .Where(q => !progressByQuestionId.ContainsKey(q.QuestionId))
             .ToList();
 
-        var correctQuestions = pool
-            .Where(q => historyByQuestionId.TryGetValue(q.QuestionId, out var history)
+        var masteredQuestions = pool
+            .Where(q => progressByQuestionId.TryGetValue(q.QuestionId, out var history)
                      && history.TimesAttempted > 0
-                     && history.LastAnswerCorrect)
+                     && history.LastResponseWasAnswered
+                     && history.LastAnswerCorrect
+                     && history.MasteryScore >= 100)
             .ToList();
 
-        var wrongTarget = (int)Math.Round(totalQuestions * WrongQuestionRatio, MidpointRounding.AwayFromZero);
+        var needsPracticeTarget = (int)Math.Round(totalQuestions * NeedsPracticeRatio, MidpointRounding.AwayFromZero);
         var unvisitedTarget = (int)Math.Round(totalQuestions * UnvisitedQuestionRatio, MidpointRounding.AwayFromZero);
-        var correctTarget = Math.Max(0, totalQuestions - wrongTarget - unvisitedTarget);
+        var masteredTarget = Math.Max(0, totalQuestions - needsPracticeTarget - unvisitedTarget);
 
         var selected = new List<Guid>(totalQuestions);
 
-        PickDiverse(wrongQuestions, selected, wrongTarget, recentQuestionIds, rng);
-        PickDiverse(unvisitedQuestions, selected, unvisitedTarget, recentQuestionIds, rng);
-        PickDiverse(correctQuestions, selected, correctTarget, recentQuestionIds, rng);
+        PickDiverse(needsPracticeQuestions, selected, needsPracticeTarget, [], rng, progressByQuestionId);
+        PickDiverse(unvisitedQuestions, selected, unvisitedTarget, recentQuestionIds, rng, progressByQuestionId);
+        PickDiverse(masteredQuestions, selected, masteredTarget, recentQuestionIds, rng, progressByQuestionId);
 
         if (selected.Count < totalQuestions)
         {
-            FillRemaining([wrongQuestions, skippedQuestions, unvisitedQuestions, correctQuestions], selected, totalQuestions, recentQuestionIds, rng);
+            FillRemaining([needsPracticeQuestions, unvisitedQuestions, masteredQuestions, pool], selected, totalQuestions, recentQuestionIds, rng, progressByQuestionId);
         }
 
         if (selected.Count < totalQuestions)
         {
-            FillRemaining([wrongQuestions, skippedQuestions, unvisitedQuestions, correctQuestions], selected, totalQuestions, new HashSet<Guid>(), rng);
+            FillRemaining([needsPracticeQuestions, unvisitedQuestions, masteredQuestions, pool], selected, totalQuestions, [], rng, progressByQuestionId);
         }
 
         return selected
@@ -226,17 +254,23 @@ public sealed class GeneratePersonalizedExamCommandHandler(
             .ToList();
     }
 
+    private static bool NeedsPractice(QuestionProgressSummary progress)
+        => !progress.LastResponseWasAnswered
+        || progress.TimesAttempted > 0
+            && (!progress.LastAnswerCorrect || progress.MasteryScore < 100);
+
     private static void FillRemaining(
         IReadOnlyList<IReadOnlyList<QuestionPoolItem>> buckets,
         List<Guid> selected,
         int totalQuestions,
         HashSet<Guid> recentQuestionIds,
-        Random rng)
+        Random rng,
+        IReadOnlyDictionary<Guid, QuestionProgressSummary> progressByQuestionId)
     {
         foreach (var bucket in buckets)
         {
             if (selected.Count >= totalQuestions) return;
-            PickDiverse(bucket, selected, totalQuestions - selected.Count, recentQuestionIds, rng);
+            PickDiverse(bucket, selected, totalQuestions - selected.Count, recentQuestionIds, rng, progressByQuestionId);
         }
     }
 
@@ -245,7 +279,8 @@ public sealed class GeneratePersonalizedExamCommandHandler(
         List<Guid> selected,
         int needed,
         HashSet<Guid> recentQuestionIds,
-        Random rng)
+        Random rng,
+        IReadOnlyDictionary<Guid, QuestionProgressSummary> progressByQuestionId)
     {
         if (needed <= 0 || source.Count == 0) return;
 
@@ -267,7 +302,8 @@ public sealed class GeneratePersonalizedExamCommandHandler(
             .GroupBy(q => q.TopicId)
             .OrderBy(_ => rng.Next())
             .Select(group => new Queue<QuestionPoolItem>(group
-                .OrderBy(q => q.EffectiveDifficulty)
+                .OrderBy(q => SelectionPriority(q, progressByQuestionId))
+                .ThenBy(q => q.EffectiveDifficulty)
                 .ThenBy(_ => rng.Next())))
             .ToList();
 
@@ -289,8 +325,21 @@ public sealed class GeneratePersonalizedExamCommandHandler(
         }
     }
 
-    private static int CalculateMockTimeLimitMinutes(int questionCount)
-        => (int)Math.Ceiling(questionCount * 2.4);
+    private static decimal SelectionPriority(
+        QuestionPoolItem question,
+        IReadOnlyDictionary<Guid, QuestionProgressSummary> progressByQuestionId)
+    {
+        if (!progressByQuestionId.TryGetValue(question.QuestionId, out var progress))
+            return 50;
+
+        if (!progress.LastResponseWasAnswered)
+            return 10;
+
+        if (progress.TimesAttempted > 0 && !progress.LastAnswerCorrect)
+            return 0;
+
+        return progress.MasteryScore;
+    }
 
     private sealed class QuestionRow
     {

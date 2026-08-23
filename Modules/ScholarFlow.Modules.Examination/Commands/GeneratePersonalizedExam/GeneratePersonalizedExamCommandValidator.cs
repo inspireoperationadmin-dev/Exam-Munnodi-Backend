@@ -10,5 +10,8 @@ public sealed class GeneratePersonalizedExamCommandValidator : AbstractValidator
         RuleFor(x => x.QuestionCount)
             .Must(count => count is 10 or 20 or 30 or 50)
             .WithMessage("Question count must be 10, 20, 30, or 50.");
+        RuleFor(x => x.ReplaceSessionId)
+            .Null()
+            .WithMessage("A timed mock exam cannot replace another session.");
     }
 }

@@ -1,5 +1,6 @@
 using Dapper;
 using MediatR;
+using ScholarFlow.Domain.Enums;
 using ScholarFlow.Domain.Interfaces;
 using ScholarFlow.Modules.Examination.DTOs;
 using ScholarFlow.SharedKernel.Exceptions;
@@ -8,11 +9,14 @@ namespace ScholarFlow.Modules.Examination.Queries.GetSessionDetail;
 
 public sealed class GetSessionDetailQueryHandler(
     ISqlConnectionFactory sql,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    ISubscriptionsApi subscriptionsApi)
     : IRequestHandler<GetSessionDetailQuery, SessionDetailDto>
 {
     public async Task<SessionDetailDto> Handle(GetSessionDetailQuery request, CancellationToken ct)
     {
+        await subscriptionsApi.EnsureActiveAccessAsync(currentUser.UserId, ct);
+
         using var conn = sql.CreateConnection();
 
         // Load session header
@@ -74,6 +78,13 @@ public sealed class GetSessionDetailQueryHandler(
         int correctCount = responseList.Count(r => r.IsCorrect);
         int skippedCount = responseList.Count(r => r.SelectedOptionId is null);
         int wrongCount   = responseList.Count - correctCount - skippedCount;
+
+        if (responseList.Count == 0
+            && session.Status != nameof(ExamSessionStatus.InProgress)
+            && session.EndTime.HasValue)
+        {
+            throw new BadRequestException("Session question details are available for 3 days after the session ends.");
+        }
 
         return new SessionDetailDto(
             SessionId:    session.SessionId,

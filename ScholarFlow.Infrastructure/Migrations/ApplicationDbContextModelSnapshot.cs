@@ -307,6 +307,9 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.Property<Guid?>("SubjectId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("TopicId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<int?>("TimeLimitMinutes")
                         .HasColumnType("int");
 
@@ -327,9 +330,17 @@ namespace ScholarFlow.Infrastructure.Migrations
 
                     b.HasIndex("SubjectId");
 
+                    b.HasIndex("TopicId");
+
                     b.HasIndex("UserId");
 
+                    b.HasIndex("EndTime", "Status");
+
                     b.HasIndex("UserId", "Status");
+
+                    b.HasIndex("UserId", "PaperId", "Mode", "Status");
+
+                    b.HasIndex("UserId", "TopicId", "Mode", "Status");
 
                     b.HasIndex("PaperId", "FinalScore", "Status");
 
@@ -785,11 +796,17 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.ToTable("StudentProfiles");
                 });
 
-            modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentQuestionHistory", b =>
+            modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentQuestionProgress", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ConsecutiveCorrect")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ConsecutiveWrong")
+                        .HasColumnType("int");
 
                     b.Property<int>("CorrectCount")
                         .HasColumnType("int");
@@ -797,14 +814,40 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.Property<bool>("LastAnswerCorrect")
                         .HasColumnType("bit");
 
+                    b.Property<string>("LastAttemptMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<bool>("LastResponseWasAnswered")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime>("LastSeenAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<decimal>("MasteryScore")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<Guid>("QuestionId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<Guid>("SubTopicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("SubjectId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<int>("TimesAttempted")
                         .HasColumnType("int");
+
+                    b.Property<Guid>("TopicId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uniqueidentifier");
@@ -813,12 +856,20 @@ namespace ScholarFlow.Infrastructure.Migrations
 
                     b.HasIndex("QuestionId");
 
+                    b.HasIndex("SubTopicId");
+
                     b.HasIndex("UserId", "LastAnswerCorrect");
+
+                    b.HasIndex("UserId", "LastSeenAt");
 
                     b.HasIndex("UserId", "QuestionId")
                         .IsUnique();
 
-                    b.ToTable("StudentQuestionHistories");
+                    b.HasIndex("UserId", "SubTopicId", "Status");
+
+                    b.HasIndex("UserId", "SubjectId", "TopicId");
+
+                    b.ToTable("StudentQuestionProgresses");
                 });
 
             modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentStudyActivity", b =>
@@ -1012,6 +1063,127 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.ToTable("StudentSubjectSelections");
                 });
 
+            modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentSubscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ActivatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ActivatedByAdminId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ActivationSource")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("AdminManual");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CancelledByAdminId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("EndsAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PromotionCode")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<DateTime>("StartsAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EndsAt");
+
+                    b.HasIndex("PlanId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "PromotionCode")
+                        .IsUnique()
+                        .HasFilter("[PromotionCode] IS NOT NULL");
+
+                    b.HasIndex("UserId", "Status", "StartsAt", "EndsAt");
+
+                    b.ToTable("StudentSubscriptions");
+                });
+
+            modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentSubscriptionUsage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Feature")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("PeriodStart")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UsedCount")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "PeriodStart", "Feature")
+                        .IsUnique();
+
+                    b.ToTable("StudentSubscriptionUsages");
+                });
+
             modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentTeacherConnection", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1045,60 +1217,6 @@ namespace ScholarFlow.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("StudentTeacherConnections");
-                });
-
-            modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentTopicQuestionProgress", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("CorrectCount")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("LastAnswerCorrect")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTime>("LastSeenAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("QuestionId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
-
-                    b.Property<Guid>("SubTopicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("SubjectId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("TimesAttempted")
-                        .HasColumnType("int");
-
-                    b.Property<Guid>("TopicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("QuestionId");
-
-                    b.HasIndex("SubTopicId");
-
-                    b.HasIndex("UserId", "QuestionId")
-                        .IsUnique();
-
-                    b.HasIndex("UserId", "SubTopicId", "Status");
-
-                    b.HasIndex("UserId", "SubjectId", "TopicId");
-
-                    b.ToTable("StudentTopicQuestionProgresses");
                 });
 
             modelBuilder.Entity("ScholarFlow.Domain.Entities.SubTopic", b =>
@@ -1203,6 +1321,229 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.HasIndex("StreamId");
 
                     b.ToTable("SubjectStreams");
+                });
+
+            modelBuilder.Entity("ScholarFlow.Domain.Entities.SubscriptionPayment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AdminNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal>("AmountLkr")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("ReceiptImageUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("ReferenceNumber")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<DateTime>("ReviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("ReviewedByAdminId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid?>("SubscriptionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewedAt");
+
+                    b.HasIndex("SubscriptionId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("SubscriptionPayments");
+                });
+
+            modelBuilder.Entity("ScholarFlow.Domain.Entities.SubscriptionPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("AllowsPaperExamMode")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("BasePriceLkr")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<string>("BillingCycle")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Free");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("DiscountPercentage")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<int>("DurationDays")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("FreeModelPaperCount")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("FreePastPaperCount")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("MonthlyMockExamLimit")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MonthlyUnitExamLimit")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("PriceLkr")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<string>("ProgressAccessLevel")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Overall");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Tier")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Free");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("SortOrder");
+
+                    b.ToTable("SubscriptionPlans");
+                });
+
+            modelBuilder.Entity("ScholarFlow.Domain.Entities.SubscriptionPlanPriceChange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ChangedByAdminId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("NewBasePriceLkr")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<decimal>("NewDiscountPercentage")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal>("NewPriceLkr")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("PreviousBasePriceLkr")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<decimal>("PreviousDiscountPercentage")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal>("PreviousPriceLkr")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("PlanId");
+
+                    b.ToTable("SubscriptionPlanPriceChanges");
                 });
 
             modelBuilder.Entity("ScholarFlow.Domain.Entities.TeacherProfile", b =>
@@ -1426,6 +1767,11 @@ namespace ScholarFlow.Infrastructure.Migrations
                         .HasForeignKey("SubjectId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("ScholarFlow.Domain.Entities.Topic", "Topic")
+                        .WithMany()
+                        .HasForeignKey("TopicId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ScholarFlow.Domain.Entities.ApplicationUser", "User")
                         .WithMany("ExamSessions")
                         .HasForeignKey("UserId")
@@ -1435,6 +1781,8 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.Navigation("Paper");
 
                     b.Navigation("Subject");
+
+                    b.Navigation("Topic");
 
                     b.Navigation("User");
                 });
@@ -1560,7 +1908,7 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentQuestionHistory", b =>
+            modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentQuestionProgress", b =>
                 {
                     b.HasOne("ScholarFlow.Domain.Entities.Question", "Question")
                         .WithMany()
@@ -1568,7 +1916,15 @@ namespace ScholarFlow.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("ScholarFlow.Domain.Entities.SubTopic", "SubTopic")
+                        .WithMany()
+                        .HasForeignKey("SubTopicId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Question");
+
+                    b.Navigation("SubTopic");
                 });
 
             modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentStudyActivity", b =>
@@ -1637,6 +1993,36 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.Navigation("Subject");
                 });
 
+            modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentSubscription", b =>
+                {
+                    b.HasOne("ScholarFlow.Domain.Entities.SubscriptionPlan", "Plan")
+                        .WithMany()
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ScholarFlow.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Plan");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentSubscriptionUsage", b =>
+                {
+                    b.HasOne("ScholarFlow.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentTeacherConnection", b =>
                 {
                     b.HasOne("ScholarFlow.Domain.Entities.StudentProfile", "StudentProfile")
@@ -1654,25 +2040,6 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.Navigation("StudentProfile");
 
                     b.Navigation("TeacherProfile");
-                });
-
-            modelBuilder.Entity("ScholarFlow.Domain.Entities.StudentTopicQuestionProgress", b =>
-                {
-                    b.HasOne("ScholarFlow.Domain.Entities.Question", "Question")
-                        .WithMany()
-                        .HasForeignKey("QuestionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ScholarFlow.Domain.Entities.SubTopic", "SubTopic")
-                        .WithMany()
-                        .HasForeignKey("SubTopicId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Question");
-
-                    b.Navigation("SubTopic");
                 });
 
             modelBuilder.Entity("ScholarFlow.Domain.Entities.SubTopic", b =>
@@ -1703,6 +2070,35 @@ namespace ScholarFlow.Infrastructure.Migrations
                     b.Navigation("Stream");
 
                     b.Navigation("Subject");
+                });
+
+            modelBuilder.Entity("ScholarFlow.Domain.Entities.SubscriptionPayment", b =>
+                {
+                    b.HasOne("ScholarFlow.Domain.Entities.StudentSubscription", "Subscription")
+                        .WithMany()
+                        .HasForeignKey("SubscriptionId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("ScholarFlow.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Subscription");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ScholarFlow.Domain.Entities.SubscriptionPlanPriceChange", b =>
+                {
+                    b.HasOne("ScholarFlow.Domain.Entities.SubscriptionPlan", "Plan")
+                        .WithMany()
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Plan");
                 });
 
             modelBuilder.Entity("ScholarFlow.Domain.Entities.TeacherProfile", b =>

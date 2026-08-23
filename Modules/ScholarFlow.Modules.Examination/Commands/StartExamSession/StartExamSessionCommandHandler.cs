@@ -6,17 +6,17 @@ using ScholarFlow.Domain.Interfaces;
 using ScholarFlow.Domain.Interfaces.Repositories;
 using ScholarFlow.Modules.Academic.Public;
 using ScholarFlow.Modules.Examination.DTOs;
-using ScholarFlow.Modules.UserProfiles.Public;
+using ScholarFlow.Modules.Examination.Services;
 using ScholarFlow.SharedKernel.Exceptions;
 
 namespace ScholarFlow.Modules.Examination.Commands.StartExamSession;
 
 public sealed class StartExamSessionCommandHandler(
-    IExamSessionRepository examRepo,
     IAcademicApi           academicApi,
-    IUserProfilesApi       userProfilesApi,
     IExplanationRepository explanationRepo,
     ISqlConnectionFactory  sql,             // <-- Injected for high-performance Dapper query
+    ISubscriptionsApi      subscriptionsApi,
+    IExamSessionStartPolicy sessionStartPolicy,
     ICurrentUser           currentUser)
     : IRequestHandler<StartExamSessionCommand, StartSessionResultDto>
 {
@@ -26,18 +26,26 @@ public sealed class StartExamSessionCommandHandler(
         var paper = await academicApi.GetPaperSummaryAsync(request.PaperId, ct)
             ?? throw new NotFoundException("Paper not found.");
 
-        // 2. Check paper access — public OR connected teacher's paper
+        // 2. Student-facing paper sessions can only use published public papers.
         if (!paper.IsPublic)
         {
-            if (paper.CreatedByTeacherId is null)
-                throw new ForbiddenException("You do not have access to this paper.");
-
-            bool connected = await userProfilesApi.IsStudentConnectedToTeacherAsync(
-                currentUser.UserId, paper.CreatedByTeacherId.Value, ct);
-
-            if (!connected)
-                throw new ForbiddenException("You do not have access to this paper.");
+            throw new ForbiddenException("You do not have access to this paper.");
         }
+
+        await subscriptionsApi.EnsureCanStartPaperAsync(
+            currentUser.UserId,
+            request.PaperId,
+            request.Mode,
+            ct);
+
+        var session = ExamSession.Start(
+            userId: currentUser.UserId,
+            paperId: request.PaperId,
+            subjectId: paper.SubjectId,
+            mode: request.Mode,
+            timeLimitMinutes: request.Mode == ExamMode.PaperPractice ? null : paper.TimeLimit);
+
+        await sessionStartPolicy.EnsureCanStartAsync(session, request.ReplaceSessionId, ct);
 
         // 4. Load all questions summary via Academic module public API (stores CorrectOptionId and Marks)
         var questionsSummary = await academicApi.GetQuestionsForExamAsync(request.PaperId, ct);
@@ -45,40 +53,37 @@ public sealed class StartExamSessionCommandHandler(
         if (questionsSummary.Count == 0)
             throw new BadRequestException("This paper has no questions.");
 
-        // 5. Create session
-        var session = ExamSession.Start(
-            userId:       currentUser.UserId,
-            paperId:      request.PaperId,
-            subjectId:    paper.SubjectId,
-            mode:         request.Mode,
-            timeLimitMinutes: request.Mode == ExamMode.PaperPractice ? null : paper.TimeLimit);
-
-        await examRepo.AddAsync(session, ct);
-
         // 6. Create UserResponse + ExamSessionQuestion for each question
+        var responses = new List<UserResponse>(questionsSummary.Count);
+        var sessionQuestions = new List<ExamSessionQuestion>(questionsSummary.Count);
         for (int i = 0; i < questionsSummary.Count; i++)
         {
             var q = questionsSummary[i];
 
-            await examRepo.AddResponseAsync(new UserResponse
+            responses.Add(new UserResponse
             {
                 Id             = Guid.NewGuid(),
                 SessionId      = session.Id,
                 QuestionId     = q.QuestionId,
                 OrderIndex     = i + 1, // Store layout index natively inside response
                 ResponseStatus = ResponseStatus.Unvisited
-            }, ct);
+            });
 
-            await examRepo.AddSessionQuestionAsync(new ExamSessionQuestion
+            sessionQuestions.Add(new ExamSessionQuestion
             {
                 Id         = Guid.NewGuid(),
                 SessionId  = session.Id,
                 QuestionId = q.QuestionId,
                 OrderIndex = i + 1
-            }, ct);
+            });
         }
 
-        await examRepo.SaveChangesAsync(ct);
+        await sessionStartPolicy.PersistAsync(
+            session,
+            responses,
+            sessionQuestions,
+            request.ReplaceSessionId,
+            ct);
 
         // 7. Fetch the detailed question texts and option details using Dapper
         using var conn = sql.CreateConnection();
@@ -95,9 +100,12 @@ public sealed class StartExamSessionCommandHandler(
                 o.OptionText,
                 o.OptionImageUrl
             FROM Questions q
+            INNER JOIN Papers p ON p.Id = q.PaperId
             LEFT JOIN Options o ON o.QuestionId = q.Id
             WHERE q.PaperId   = @PaperId
               AND q.IsDeleted  = 0
+              AND p.IsDeleted = 0
+              AND p.IsPublic = 1
             ORDER BY q.OrderIndex, o.Label
             """,
             new { PaperId = request.PaperId });

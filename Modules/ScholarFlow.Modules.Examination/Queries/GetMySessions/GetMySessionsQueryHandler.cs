@@ -18,6 +18,8 @@ public sealed class GetMySessionsQueryHandler(
             SELECT
                 es.Id           AS SessionId,
                 es.PaperId,
+                COALESCE(es.SubjectId, p.SubjectId) AS SubjectId,
+                es.TopicId,
                 p.Title         AS PaperTitle,
                 CASE
                     WHEN sp.Medium = 2 THEN COALESCE(NULLIF(s.NameTamil, N''), s.NameEnglish)
@@ -25,6 +27,7 @@ public sealed class GetMySessionsQueryHandler(
                     ELSE s.NameEnglish
                 END AS SubjectName,
                 es.StartTime,
+                es.LastActivityAt,
                 es.ExpiresAt,
                 es.TimeLimitMinutes,
                 es.EndTime,
@@ -39,6 +42,7 @@ public sealed class GetMySessionsQueryHandler(
             LEFT JOIN StudentProfiles sp ON sp.UserId = @UserId
             WHERE es.UserId = @UserId
               AND (@PaperId IS NULL OR es.PaperId = @PaperId)
+              AND (@SubjectId IS NULL OR COALESCE(es.SubjectId, p.SubjectId) = @SubjectId)
               AND (@Mode    IS NULL OR es.Mode    = @Mode)
             ORDER BY es.StartTime DESC
             """,
@@ -46,15 +50,19 @@ public sealed class GetMySessionsQueryHandler(
             {
                 UserId     = currentUser.UserId,
                 request.PaperId,
+                request.SubjectId,
                 Mode = request.Mode?.ToString()
             });
 
         return rows.Select(r => new SessionSummaryDto(
             SessionId:    r.SessionId,
             PaperId:      r.PaperId,
+            SubjectId:    r.SubjectId,
+            TopicId:      r.TopicId,
             PaperTitle:   r.PaperTitle,
             SubjectName:  r.SubjectName,
             StartTime:    r.StartTime,
+            LastActivityAt: r.LastActivityAt,
             ServerNow:    DateTime.UtcNow,
             ExpiresAt:    r.ExpiresAt,
             TimeLimitMinutes: r.TimeLimitMinutes,
@@ -70,9 +78,12 @@ public sealed class GetMySessionsQueryHandler(
     private sealed record SessionSummaryRow(
         Guid SessionId,
         Guid? PaperId,
+        Guid? SubjectId,
+        Guid? TopicId,
         string? PaperTitle,
         string? SubjectName,
         DateTime StartTime,
+        DateTime LastActivityAt,
         DateTime? ExpiresAt,
         int? TimeLimitMinutes,
         DateTime? EndTime,

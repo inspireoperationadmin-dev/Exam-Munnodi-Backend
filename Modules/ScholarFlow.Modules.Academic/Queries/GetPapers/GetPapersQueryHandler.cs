@@ -1,5 +1,6 @@
 using Dapper;
 using MediatR;
+using ScholarFlow.Domain.Enums;
 using ScholarFlow.Domain.Interfaces;
 using ScholarFlow.Modules.Academic.DTOs;
 
@@ -7,7 +8,8 @@ namespace ScholarFlow.Modules.Academic.Queries.GetPapers;
 
 public sealed class GetPapersQueryHandler(
     ISqlConnectionFactory sql,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    ISubscriptionsApi subscriptionsApi)
     : IRequestHandler<GetPapersQuery, List<PaperSummaryDto>>
 {
     public async Task<List<PaperSummaryDto>> Handle(GetPapersQuery request, CancellationToken ct)
@@ -15,6 +17,7 @@ public sealed class GetPapersQueryHandler(
         using var conn = sql.CreateConnection();
 
         var where = new List<string> { "p.IsDeleted = 0" };
+        if (currentUser.IsInRole(AppRole.Student)) where.Add("p.IsPublic = 1");
         if (request.SubjectId.HasValue) where.Add("p.SubjectId = @SubjectId");
         if (request.Type.HasValue)      where.Add("p.Type = @Type");
         if (request.Medium.HasValue)    where.Add("p.Medium = @Medium");
@@ -56,6 +59,30 @@ public sealed class GetPapersQueryHandler(
             request.Year
         });
 
-        return rows.AsList();
+        var paperList = rows.AsList();
+        if (!currentUser.IsInRole(AppRole.Student))
+        {
+            return paperList
+                .Select(p => p with { CanPractice = true, CanUseExamMode = true })
+                .ToList();
+        }
+
+        var accessByPaperId = await subscriptionsApi.GetPaperAccessAsync(
+            currentUser.UserId,
+            paperList.Select(p => p.Id).ToList(),
+            ct);
+
+        return paperList.Select(p =>
+        {
+            var access = accessByPaperId[p.Id];
+            return p with
+            {
+                IsLocked = access.IsLocked,
+                CanPractice = access.CanPractice,
+                CanUseExamMode = access.CanUseExamMode,
+                LockReason = access.LockReason,
+                RequiredPlan = access.RequiredPlan?.ToString()
+            };
+        }).ToList();
     }
 }

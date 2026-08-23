@@ -5,4 +5,5 @@ namespace ScholarFlow.Modules.Examination.Commands.GeneratePersonalizedExam;
 
 public sealed record GeneratePersonalizedExamCommand(
     Guid SubjectId,
-    int QuestionCount = 50) : IRequest<StartSessionResultDto>;
+    int QuestionCount = 50,
+    Guid? ReplaceSessionId = null) : IRequest<StartSessionResultDto>;

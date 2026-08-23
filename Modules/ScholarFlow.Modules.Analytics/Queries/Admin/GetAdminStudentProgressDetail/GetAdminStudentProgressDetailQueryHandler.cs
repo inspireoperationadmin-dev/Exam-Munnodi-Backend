@@ -60,60 +60,26 @@ public sealed class GetAdminStudentProgressDetailQueryHandler(ISqlConnectionFact
                     t.SubjectId,
                     COUNT(q.Id) AS TotalQuestionsInSubject
                 FROM Questions q
+                JOIN Papers p ON p.Id = q.PaperId
                 JOIN SubTopics st ON st.Id = q.SubTopicId
                 JOIN Topics t ON t.Id = st.TopicId
                 WHERE q.IsDeleted = 0
+                  AND p.IsDeleted = 0
+                  AND p.IsPublic = 1
                   AND st.IsDeleted = 0
                   AND t.IsDeleted = 0
                 GROUP BY t.SubjectId
             ),
-            AnsweredMockResponses AS (
-                SELECT
-                    t.SubjectId,
-                    ur.QuestionId,
-                    ur.IsCorrect,
-                    ur.OrderIndex,
-                    es.StartTime,
-                    es.EndTime
-                FROM UserResponses ur
-                JOIN ExamSessions es ON es.Id = ur.SessionId
-                JOIN Questions q ON q.Id = ur.QuestionId
-                JOIN SubTopics st ON st.Id = q.SubTopicId
-                JOIN Topics t ON t.Id = st.TopicId
-                WHERE es.UserId = @StudentId
-                  AND es.Mode = N'MockExam'
-                  AND es.Status IN (N'Completed', N'TimedOut')
-                  AND ur.SelectedOptionId IS NOT NULL
-                  AND q.IsDeleted = 0
-                  AND st.IsDeleted = 0
-                  AND t.IsDeleted = 0
-            ),
-            AnsweredAggregates AS (
+            ProgressAggregates AS (
                 SELECT
                     SubjectId,
-                    COUNT(DISTINCT QuestionId) AS UniqueQuestionsAttempted,
-                    COUNT(*) AS TotalQuestionsAttempted,
-                    SUM(CASE WHEN IsCorrect = 1 THEN 1 ELSE 0 END) AS CorrectCount
-                FROM AnsweredMockResponses
-                GROUP BY SubjectId
-            ),
-            LatestAnswered AS (
-                SELECT
-                    SubjectId,
-                    QuestionId,
-                    IsCorrect,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY SubjectId, QuestionId
-                        ORDER BY COALESCE(EndTime, StartTime) DESC, OrderIndex DESC
-                    ) AS RowNumber
-                FROM AnsweredMockResponses
-            ),
-            MasteryAggregates AS (
-                SELECT
-                    SubjectId,
-                    SUM(CASE WHEN IsCorrect = 1 THEN 1 ELSE 0 END) AS MasteredQuestions
-                FROM LatestAnswered
-                WHERE RowNumber = 1
+                    COUNT(QuestionId) AS UniqueQuestionsAttempted,
+                    SUM(CASE WHEN MasteryScore >= 100 THEN 1 ELSE 0 END) AS MasteredQuestions,
+                    SUM(TimesAttempted) AS TotalQuestionsAttempted,
+                    SUM(CorrectCount) AS CorrectCount,
+                    SUM(MasteryScore) AS MasteryScoreTotal
+                FROM StudentQuestionProgresses
+                WHERE UserId = @StudentId
                 GROUP BY SubjectId
             ),
             MockSessionStats AS (
@@ -156,37 +122,36 @@ public sealed class GetAdminStudentProgressDetailQueryHandler(ISqlConnectionFact
                 ss.SubjectId,
                 ss.SubjectName,
                 COALESCE(sqt.TotalQuestionsInSubject, 0) AS TotalQuestionsInSubject,
-                COALESCE(aa.UniqueQuestionsAttempted, 0) AS UniqueQuestionsAttempted,
-                COALESCE(ma.MasteredQuestions, 0) AS MasteredQuestions,
+                COALESCE(pa.UniqueQuestionsAttempted, 0) AS UniqueQuestionsAttempted,
+                COALESCE(pa.MasteredQuestions, 0) AS MasteredQuestions,
                 COALESCE(mss.MockExamsCompleted, 0) AS MockExamsCompleted,
                 COALESCE(mss.AverageMockScore, 0) AS AverageMockScore,
                 COALESCE(mss.BestMockScore, 0) AS BestMockScore,
                 CAST(CASE WHEN COALESCE(sqt.TotalQuestionsInSubject, 0) > 0
-                    THEN ROUND(CAST(COALESCE(aa.UniqueQuestionsAttempted, 0) AS decimal(18, 4)) / sqt.TotalQuestionsInSubject * 100, 2)
+                    THEN ROUND(CAST(COALESCE(pa.UniqueQuestionsAttempted, 0) AS decimal(18, 4)) / sqt.TotalQuestionsInSubject * 100, 2)
                     ELSE 0 END AS decimal(5, 2)) AS CoveragePercentage,
                 CAST(CASE WHEN COALESCE(sqt.TotalQuestionsInSubject, 0) > 0
-                    THEN ROUND(CAST(COALESCE(ma.MasteredQuestions, 0) AS decimal(18, 4)) / sqt.TotalQuestionsInSubject * 100, 2)
+                    THEN ROUND(CAST(COALESCE(pa.MasteryScoreTotal, 0) AS decimal(18, 4)) / sqt.TotalQuestionsInSubject, 2)
                     ELSE 0 END AS decimal(5, 2)) AS MasteryPercentage,
-                CAST(CASE WHEN COALESCE(aa.TotalQuestionsAttempted, 0) > 0
-                    THEN ROUND(CAST(COALESCE(aa.CorrectCount, 0) AS decimal(18, 4)) / aa.TotalQuestionsAttempted * 100, 2)
+                CAST(CASE WHEN COALESCE(pa.TotalQuestionsAttempted, 0) > 0
+                    THEN ROUND(CAST(COALESCE(pa.CorrectCount, 0) AS decimal(18, 4)) / pa.TotalQuestionsAttempted * 100, 2)
                     ELSE 0 END AS decimal(5, 2)) AS AccuracyPercentage,
                 CAST((
                     0.35 * CASE WHEN COALESCE(sqt.TotalQuestionsInSubject, 0) > 0
-                        THEN ROUND(CAST(COALESCE(aa.UniqueQuestionsAttempted, 0) AS decimal(18, 4)) / sqt.TotalQuestionsInSubject * 100, 2)
+                        THEN ROUND(CAST(COALESCE(pa.UniqueQuestionsAttempted, 0) AS decimal(18, 4)) / sqt.TotalQuestionsInSubject * 100, 2)
                         ELSE 0 END
                     + 0.45 * CASE WHEN COALESCE(sqt.TotalQuestionsInSubject, 0) > 0
-                        THEN ROUND(CAST(COALESCE(ma.MasteredQuestions, 0) AS decimal(18, 4)) / sqt.TotalQuestionsInSubject * 100, 2)
+                        THEN ROUND(CAST(COALESCE(pa.MasteryScoreTotal, 0) AS decimal(18, 4)) / sqt.TotalQuestionsInSubject, 2)
                         ELSE 0 END
-                    + 0.20 * CASE WHEN COALESCE(aa.TotalQuestionsAttempted, 0) > 0
-                        THEN ROUND(CAST(COALESCE(aa.CorrectCount, 0) AS decimal(18, 4)) / aa.TotalQuestionsAttempted * 100, 2)
+                    + 0.20 * CASE WHEN COALESCE(pa.TotalQuestionsAttempted, 0) > 0
+                        THEN ROUND(CAST(COALESCE(pa.CorrectCount, 0) AS decimal(18, 4)) / pa.TotalQuestionsAttempted * 100, 2)
                         ELSE 0 END
                 ) AS decimal(5, 2)) AS ReadinessPercentage,
                 CAST(ROUND(COALESCE(cw.CurrentAverage, 0) - COALESCE(pw.PreviousAverage, 0), 2) AS decimal(5, 2)) AS WeeklyChangePercentage,
                 mss.LastStudiedAt
             FROM SelectedSubjects ss
             LEFT JOIN SubjectQuestionTotals sqt ON sqt.SubjectId = ss.SubjectId
-            LEFT JOIN AnsweredAggregates aa ON aa.SubjectId = ss.SubjectId
-            LEFT JOIN MasteryAggregates ma ON ma.SubjectId = ss.SubjectId
+            LEFT JOIN ProgressAggregates pa ON pa.SubjectId = ss.SubjectId
             LEFT JOIN MockSessionStats mss ON mss.SubjectId = ss.SubjectId
             LEFT JOIN CurrentWeek cw ON cw.SubjectId = ss.SubjectId
             LEFT JOIN PreviousWeek pw ON pw.SubjectId = ss.SubjectId

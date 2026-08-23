@@ -10,4 +10,7 @@ public static class ExamModeExtensions
 
     public static bool IsPracticeMode(this ExamMode mode)
         => mode is ExamMode.PaperPractice or ExamMode.TopicPractice;
+
+    public static bool IsTimedMode(this ExamMode mode)
+        => !mode.IsPracticeMode();
 }

@@ -9,7 +9,6 @@ using ScholarFlow.Modules.Examination.Commands.GeneratePersonalizedExam;
 using ScholarFlow.Modules.Examination.Commands.StartExamSession;
 using ScholarFlow.Modules.Examination.Commands.StartTopicExamSession; // <-- Added namespace import [1]
 using ScholarFlow.Modules.Examination.Commands.SubmitAnswer;
-using ScholarFlow.Modules.Examination.Queries.GetAvailablePapers;
 using ScholarFlow.Modules.Examination.Queries.GetActiveSession;
 using ScholarFlow.Modules.Examination.Queries.GetMySessions;
 using ScholarFlow.Modules.Examination.Queries.GetPaperQuestionsForExam;
@@ -25,15 +24,6 @@ namespace ScholarFlow.WebAPI.Controllers;
 public sealed class ExaminationController(IMediator mediator) : ControllerBase
 {
     // ── Papers ────────────────────────────────────────────────────────────────
-
-    [HttpGet("papers")]
-    public async Task<IActionResult> GetAvailablePapers(
-        [FromQuery] Guid? subjectId,
-        [FromQuery] string? type,
-        [FromQuery] string? medium,
-        [FromQuery] int? year,
-        CancellationToken ct)
-        => Ok(await mediator.Send(new GetAvailablePapersQuery(subjectId, type, medium, year), ct));
 
     [HttpGet("papers/{id:guid}/questions")]
     public async Task<IActionResult> GetPaperQuestions(Guid id, CancellationToken ct)
@@ -106,9 +96,10 @@ public sealed class ExaminationController(IMediator mediator) : ControllerBase
     [HttpGet("sessions")]
     public async Task<IActionResult> GetMySessions(
         [FromQuery] Guid? paperId,
+        [FromQuery] Guid? subjectId,
         [FromQuery] ExamMode? mode,
         CancellationToken ct)
-        => Ok(await mediator.Send(new GetMySessionsQuery(paperId, mode), ct));
+        => Ok(await mediator.Send(new GetMySessionsQuery(paperId, subjectId, mode), ct));
 
     [HttpGet("sessions/{id:guid}")]
     public async Task<IActionResult> GetSessionDetail(Guid id, CancellationToken ct)

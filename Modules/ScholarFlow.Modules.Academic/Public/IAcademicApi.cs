@@ -4,7 +4,6 @@ namespace ScholarFlow.Modules.Academic.Public;
 
 public interface IAcademicApi
 {
-    Task<bool> PaperExistsAsync(Guid paperId, CancellationToken ct = default);
     Task<AcademicPaperSummary?> GetPaperSummaryAsync(Guid paperId, CancellationToken ct = default);
     Task<IReadOnlyList<AcademicQuestionSummary>> GetQuestionsForExamAsync(Guid paperId, CancellationToken ct = default);
     Task<IReadOnlyList<QuestionPoolItem>> GetQuestionPoolAsync(Guid subjectId, CancellationToken ct = default);

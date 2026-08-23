@@ -25,6 +25,7 @@ public static class DataSeeder
 
         await SeedRolesAsync(roleManager);
         await SeedSuperAdminAsync(userManager);
+        await SeedSubscriptionPlansAsync(db);
     }
 
     // ── Roles ─────────────────────────────────────────────────────────────────
@@ -73,4 +74,96 @@ public static class DataSeeder
         if (!roleResult.Succeeded)
             throw new Exception($"Failed to assign SuperAdmin role: {string.Join(", ", roleResult.Errors.Select(e => e.Description))}");
     }
+
+    private static async Task SeedSubscriptionPlansAsync(ApplicationDbContext db)
+    {
+        var plans = new[]
+        {
+            new PlanSeed(SubscriptionPlanCode.Free, "Free", SubscriptionTier.Free, SubscriptionBillingCycle.Free,
+                0, 0m, 0m, false, 2, 2, 5, 3, ProgressAccessLevel.Overall, 1),
+            new PlanSeed(SubscriptionPlanCode.BasicMonthly, "Basic Monthly", SubscriptionTier.Basic, SubscriptionBillingCycle.Monthly,
+                30, 490m, 0m, true, null, null, 15, 20, ProgressAccessLevel.Detailed, 2),
+            new PlanSeed(SubscriptionPlanCode.BasicAnnual, "Basic Annual", SubscriptionTier.Basic, SubscriptionBillingCycle.Annual,
+                365, 5880m, 30m, true, null, null, 15, 20, ProgressAccessLevel.Detailed, 3),
+            new PlanSeed(SubscriptionPlanCode.ProMonthly, "Pro Monthly", SubscriptionTier.Pro, SubscriptionBillingCycle.Monthly,
+                30, 890m, 0m, true, null, null, null, null, ProgressAccessLevel.Full, 4),
+            new PlanSeed(SubscriptionPlanCode.ProAnnual, "Pro Annual", SubscriptionTier.Pro, SubscriptionBillingCycle.Annual,
+                365, 10680m, 30m, true, null, null, null, null, ProgressAccessLevel.Full, 5)
+        };
+
+        foreach (var seed in plans)
+        {
+            var existing = await db.SubscriptionPlans
+                .FirstOrDefaultAsync(p => p.Code == seed.Code);
+
+            if (existing is null)
+            {
+                await db.SubscriptionPlans.AddAsync(SubscriptionPlan.Create(
+                    seed.Code,
+                    seed.Name,
+                    seed.Tier,
+                    seed.BillingCycle,
+                    seed.DurationDays,
+                    seed.BasePriceLkr,
+                    seed.DiscountPercentage,
+                    seed.AllowsPaperExamMode,
+                    seed.FreePastPaperCount,
+                    seed.FreeModelPaperCount,
+                    seed.MonthlyMockExamLimit,
+                    seed.MonthlyUnitExamLimit,
+                    seed.ProgressAccessLevel,
+                    seed.SortOrder));
+            }
+            else
+            {
+                existing.Update(
+                    seed.Name,
+                    seed.Tier,
+                    seed.BillingCycle,
+                    seed.DurationDays,
+                    seed.AllowsPaperExamMode,
+                    seed.FreePastPaperCount,
+                    seed.FreeModelPaperCount,
+                    seed.MonthlyMockExamLimit,
+                    seed.MonthlyUnitExamLimit,
+                    seed.ProgressAccessLevel,
+                    isActive: true,
+                    seed.SortOrder);
+            }
+        }
+
+        var legacyCodes = new[]
+        {
+            SubscriptionPlanCode.LaunchFree,
+            SubscriptionPlanCode.Trial,
+            SubscriptionPlanCode.Monthly,
+            SubscriptionPlanCode.Quarterly,
+            SubscriptionPlanCode.SixMonths
+        };
+
+        var legacyPlans = await db.SubscriptionPlans
+            .Where(p => legacyCodes.Contains(p.Code))
+            .ToListAsync();
+
+        foreach (var legacyPlan in legacyPlans)
+            legacyPlan.Deactivate();
+
+        await db.SaveChangesAsync();
+    }
+
+    private sealed record PlanSeed(
+        SubscriptionPlanCode Code,
+        string Name,
+        SubscriptionTier Tier,
+        SubscriptionBillingCycle BillingCycle,
+        int DurationDays,
+        decimal BasePriceLkr,
+        decimal DiscountPercentage,
+        bool AllowsPaperExamMode,
+        int? FreePastPaperCount,
+        int? FreeModelPaperCount,
+        int? MonthlyMockExamLimit,
+        int? MonthlyUnitExamLimit,
+        ProgressAccessLevel ProgressAccessLevel,
+        int SortOrder);
 }

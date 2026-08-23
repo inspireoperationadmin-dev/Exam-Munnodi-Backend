@@ -15,8 +15,8 @@ public interface IAnalyticsApi
     Task<HashSet<Guid>> GetRecentlySeenQuestionIdsAsync(
         Guid userId, int withinDays, CancellationToken ct = default);
 
-    /// <summary>Returns per-question history for the requested question IDs.</summary>
-    Task<IReadOnlyList<QuestionHistorySummary>> GetQuestionHistoriesAsync(
+    /// <summary>Returns per-question progress for the requested question IDs.</summary>
+    Task<IReadOnlyList<QuestionProgressSummary>> GetQuestionProgressSummariesAsync(
         Guid userId, IReadOnlyCollection<Guid> questionIds, CancellationToken ct = default);
 }
 
@@ -28,10 +28,11 @@ public sealed record SubTopicPerformanceSummary(
     decimal MasteryPercentage,
     decimal HealthPercentage);
 
-public sealed record QuestionHistorySummary(
+public sealed record QuestionProgressSummary(
     Guid QuestionId,
     int TimesAttempted,
     int CorrectCount,
     bool LastAnswerCorrect,
     bool LastResponseWasAnswered,
+    decimal MasteryScore,
     DateTime LastSeenAt);

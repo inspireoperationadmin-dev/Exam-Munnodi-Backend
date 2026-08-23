@@ -13,11 +13,14 @@ public sealed class GetSessionResumeQueryHandler(
     IExamSessionRepository examRepo,
     IExplanationRepository explanationRepo,
     ISqlConnectionFactory sql,
+    ISubscriptionsApi subscriptionsApi,
     ICurrentUser currentUser)
     : IRequestHandler<GetSessionResumeQuery, ResumeSessionResultDto>
 {
     public async Task<ResumeSessionResultDto> Handle(GetSessionResumeQuery request, CancellationToken ct)
     {
+        await subscriptionsApi.EnsureActiveAccessAsync(currentUser.UserId, ct);
+
         var session = await examRepo.GetByIdWithResponsesAsync(request.SessionId, ct)
             ?? throw new NotFoundException("Exam session not found.");
 

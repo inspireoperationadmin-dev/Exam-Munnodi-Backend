@@ -1,5 +1,6 @@
 using Dapper;
 using MediatR;
+using ScholarFlow.Domain.Enums;
 using ScholarFlow.Domain.Interfaces;
 using ScholarFlow.Modules.Analytics.DTOs;
 
@@ -7,11 +8,17 @@ namespace ScholarFlow.Modules.Analytics.Queries.GetTopicPerformance;
 
 public sealed class GetTopicPerformanceQueryHandler(
     ISqlConnectionFactory sql,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    ISubscriptionsApi subscriptionsApi)
     : IRequestHandler<GetTopicPerformanceQuery, List<TopicPerformanceDto>>
 {
     public async Task<List<TopicPerformanceDto>> Handle(GetTopicPerformanceQuery request, CancellationToken ct)
     {
+        await subscriptionsApi.EnsureProgressAccessAsync(
+            currentUser.UserId,
+            ProgressAccessLevel.Detailed,
+            ct);
+
         using var conn = sql.CreateConnection();
 
         var rows = await conn.QueryAsync<TopicPerformanceDto>("""
@@ -20,10 +27,13 @@ public sealed class GetTopicPerformanceQueryHandler(
                     st.TopicId,
                     COUNT(q.Id) AS TotalQuestionsInTopic
                 FROM Questions q
+                JOIN Papers p ON p.Id = q.PaperId
                 JOIN SubTopics st ON st.Id = q.SubTopicId
                 JOIN Topics t ON t.Id = st.TopicId
                 WHERE t.SubjectId = @SubjectId
                   AND q.IsDeleted = 0
+                  AND p.IsDeleted = 0
+                  AND p.IsPublic = 1
                   AND st.IsDeleted = 0
                   AND t.IsDeleted = 0
                 GROUP BY st.TopicId
@@ -37,7 +47,7 @@ public sealed class GetTopicPerformanceQueryHandler(
                 END AS TopicName,
                 COALESCE(tqt.TotalQuestionsInTopic, 0) AS TotalQuestionsInTopic,
                 COUNT(p.QuestionId) AS UniqueQuestionsAttempted,
-                SUM(CASE WHEN p.Status = N'Mastered' THEN 1 ELSE 0 END) AS MasteredQuestions,
+                SUM(CASE WHEN p.MasteryScore >= 100 THEN 1 ELSE 0 END) AS MasteredQuestions,
                 SUM(p.TimesAttempted) AS TotalAttempts,
                 SUM(p.CorrectCount) AS CorrectCount,
                 CAST(
@@ -48,7 +58,7 @@ public sealed class GetTopicPerformanceQueryHandler(
                 ) AS CoveragePercentage,
                 CAST(
                     CASE WHEN COALESCE(tqt.TotalQuestionsInTopic, 0) > 0
-                        THEN ROUND(CAST(SUM(CASE WHEN p.Status = N'Mastered' THEN 1 ELSE 0 END) AS decimal(18, 4)) / tqt.TotalQuestionsInTopic * 100, 2)
+                        THEN ROUND(CAST(SUM(p.MasteryScore) AS decimal(18, 4)) / tqt.TotalQuestionsInTopic, 2)
                         ELSE 0
                     END AS decimal(5, 2)
                 ) AS MasteryPercentage,
@@ -60,12 +70,12 @@ public sealed class GetTopicPerformanceQueryHandler(
                 ) AS AccuracyPercentage,
                 CAST(
                     CASE WHEN COUNT(p.QuestionId) > 0
-                        THEN ROUND(CAST(SUM(CASE WHEN p.Status = N'Mastered' THEN 1 ELSE 0 END) AS decimal(18, 4)) / COUNT(p.QuestionId) * 100, 2)
+                        THEN ROUND(CAST(SUM(CASE WHEN p.MasteryScore >= 100 THEN 1 ELSE 0 END) AS decimal(18, 4)) / COUNT(p.QuestionId) * 100, 2)
                         ELSE 0
                     END AS decimal(5, 2)
                 ) AS HealthPercentage,
                 MAX(p.LastSeenAt) AS LastUpdated
-            FROM StudentTopicQuestionProgresses p
+            FROM StudentQuestionProgresses p
             JOIN Topics t ON t.Id = p.TopicId
             LEFT JOIN StudentProfiles sp ON sp.UserId = @UserId
             LEFT JOIN TopicQuestionTotals tqt ON tqt.TopicId = p.TopicId

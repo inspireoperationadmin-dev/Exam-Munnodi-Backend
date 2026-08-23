@@ -12,4 +12,5 @@ public sealed record ApiResponse(
 public sealed record ApiError(
     string                  Code,
     string                  Message,
-    IReadOnlyList<string>?  Details = null);
+    IReadOnlyList<string>?  Details = null,
+    IReadOnlyDictionary<string, object?>? Metadata = null);

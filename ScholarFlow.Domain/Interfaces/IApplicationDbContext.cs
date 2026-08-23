@@ -38,14 +38,20 @@ public interface IApplicationDbContext
     // Analytics
     DbSet<StudentSubTopicPerformance> StudentSubTopicPerformances { get; }
     DbSet<StudentSubjectPerformance> StudentSubjectPerformances { get; }
-    DbSet<StudentQuestionHistory> StudentQuestionHistories { get; }
-    DbSet<StudentTopicQuestionProgress> StudentTopicQuestionProgresses { get; }
+    DbSet<StudentQuestionProgress> StudentQuestionProgresses { get; }
 
     // Auth
     DbSet<OtpCode> OtpCodes { get; }
 
     // Notifications
     DbSet<NotificationDevice> NotificationDevices { get; }
+
+    // Subscriptions
+    DbSet<SubscriptionPlan> SubscriptionPlans { get; }
+    DbSet<StudentSubscription> StudentSubscriptions { get; }
+    DbSet<SubscriptionPayment> SubscriptionPayments { get; }
+    DbSet<StudentSubscriptionUsage> StudentSubscriptionUsages { get; }
+    DbSet<SubscriptionPlanPriceChange> SubscriptionPlanPriceChanges { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

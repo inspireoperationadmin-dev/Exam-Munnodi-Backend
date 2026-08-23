@@ -24,39 +24,45 @@ public sealed class ExamSessionCompletedDomainEventHandler(
 
         var now = DateTime.UtcNow;
 
+        await UpdateQuestionProgressAsync(notification.UserId, responses, notification.Mode, now, ct);
+        await analyticsRepo.SaveChangesAsync(ct);
+
+        foreach (var subTopicId in responses
+            .Where(response => response.WasAnswered)
+            .Select(r => r.SubTopicId)
+            .Distinct())
+        {
+            await analyticsRepo.RecalculateSubTopicPerformanceAsync(notification.UserId, subTopicId, ct);
+        }
+
         if (notification.Mode == ExamMode.TopicExam)
         {
-            await UpdateTopicProgressAsync(notification.UserId, responses, now, ct);
             await analyticsRepo.SaveChangesAsync(ct);
             return;
         }
 
-        await UpdateMockQuestionHistoryAsync(notification.UserId, responses, now, ct);
         await UpdateSubjectPerformanceAsync(notification, responses, now, ct);
         await analyticsRepo.SaveChangesAsync(ct);
         await UpdateSystemDifficultyAsync(notification.UserId, responses, ct);
     }
 
-    private async Task UpdateTopicProgressAsync(
+    private async Task UpdateQuestionProgressAsync(
         Guid userId,
         IReadOnlyList<SessionResponseSummary> responses,
+        ExamMode mode,
         DateTime now,
         CancellationToken ct)
     {
-        var answeredResponses = responses
-            .Where(response => response.WasAnswered)
-            .ToList();
-
-        if (answeredResponses.Count == 0)
+        if (responses.Count == 0)
             return;
 
-        foreach (var response in answeredResponses)
+        foreach (var response in responses)
         {
-            var progress = await analyticsRepo.GetTopicQuestionProgressAsync(userId, response.QuestionId, ct);
+            var progress = await analyticsRepo.GetQuestionProgressAsync(userId, response.QuestionId, ct);
 
             if (progress is null)
             {
-                await analyticsRepo.AddTopicQuestionProgressAsync(new StudentTopicQuestionProgress
+                progress = new StudentQuestionProgress
                 {
                     Id = Guid.NewGuid(),
                     UserId = userId,
@@ -64,68 +70,13 @@ public sealed class ExamSessionCompletedDomainEventHandler(
                     SubjectId = response.SubjectId,
                     TopicId = response.TopicId,
                     SubTopicId = response.SubTopicId,
-                    TimesAttempted = 1,
-                    CorrectCount = response.IsCorrect ? 1 : 0,
-                    LastAnswerCorrect = response.IsCorrect,
-                    Status = response.IsCorrect
-                        ? QuestionProgressStatus.Mastered
-                        : QuestionProgressStatus.NeedsRevision,
-                    LastSeenAt = now
-                }, ct);
-            }
-            else
-            {
-                progress.SubjectId = response.SubjectId;
-                progress.TopicId = response.TopicId;
-                progress.SubTopicId = response.SubTopicId;
-                progress.TimesAttempted++;
-                if (response.IsCorrect) progress.CorrectCount++;
-                progress.LastAnswerCorrect = response.IsCorrect;
-                progress.Status = response.IsCorrect
-                    ? QuestionProgressStatus.Mastered
-                    : QuestionProgressStatus.NeedsRevision;
-                progress.LastSeenAt = now;
-            }
-        }
+                    LastAttemptMode = mode
+                };
 
-        await analyticsRepo.SaveChangesAsync(ct);
-
-        foreach (var subTopicId in answeredResponses.Select(r => r.SubTopicId).Distinct())
-        {
-            await analyticsRepo.RecalculateSubTopicPerformanceAsync(userId, subTopicId, ct);
-        }
-    }
-
-    private async Task UpdateMockQuestionHistoryAsync(
-        Guid userId,
-        IReadOnlyList<SessionResponseSummary> responses,
-        DateTime now,
-        CancellationToken ct)
-    {
-        foreach (var response in responses)
-        {
-            var history = await analyticsRepo.GetQuestionHistoryAsync(userId, response.QuestionId, ct);
-
-            if (history is null)
-            {
-                await analyticsRepo.AddQuestionHistoryAsync(new StudentQuestionHistory
-                {
-                    Id               = Guid.NewGuid(),
-                    UserId           = userId,
-                    QuestionId       = response.QuestionId,
-                    TimesAttempted   = 1,
-                    CorrectCount     = response.IsCorrect ? 1 : 0,
-                    LastAnswerCorrect = response.IsCorrect,
-                    LastSeenAt       = now
-                }, ct);
+                await analyticsRepo.AddQuestionProgressAsync(progress, ct);
             }
-            else
-            {
-                history.TimesAttempted++;
-                if (response.IsCorrect) history.CorrectCount++;
-                history.LastAnswerCorrect = response.IsCorrect;
-                history.LastSeenAt        = now;
-            }
+
+            ApplyQuestionProgressAttempt(progress, response, mode, now);
         }
     }
 
@@ -199,6 +150,53 @@ public sealed class ExamSessionCompletedDomainEventHandler(
         }
     }
 
+    private static void ApplyQuestionProgressAttempt(
+        StudentQuestionProgress progress,
+        SessionResponseSummary response,
+        ExamMode mode,
+        DateTime now)
+    {
+        progress.SubjectId = response.SubjectId;
+        progress.TopicId = response.TopicId;
+        progress.SubTopicId = response.SubTopicId;
+        progress.LastResponseWasAnswered = response.WasAnswered;
+        progress.LastAttemptMode = mode;
+        progress.LastSeenAt = now;
+
+        if (response.WasAnswered)
+        {
+            progress.TimesAttempted++;
+            progress.LastAnswerCorrect = response.IsCorrect;
+
+            if (response.IsCorrect)
+            {
+                progress.CorrectCount++;
+                progress.ConsecutiveCorrect++;
+                progress.ConsecutiveWrong = 0;
+            }
+            else
+            {
+                progress.ConsecutiveCorrect = 0;
+                progress.ConsecutiveWrong++;
+            }
+        }
+        else
+        {
+            progress.LastAnswerCorrect = false;
+        }
+
+        progress.MasteryScore = CalculateQuestionMasteryScore(progress.ConsecutiveCorrect);
+        progress.Status = progress.MasteryScore switch
+        {
+            >= 100 => QuestionProgressStatus.Mastered,
+            > 0 => QuestionProgressStatus.Improving,
+            _ => QuestionProgressStatus.NeedsRevision
+        };
+    }
+
+    private static decimal CalculateQuestionMasteryScore(int consecutiveCorrect)
+        => Math.Min(100m, Math.Round((decimal)consecutiveCorrect / 2 * 100, 2));
+
     private async Task UpdateSystemDifficultyAsync(
         Guid userId,
         IReadOnlyList<SessionResponseSummary> responses,
@@ -206,11 +204,11 @@ public sealed class ExamSessionCompletedDomainEventHandler(
     {
         foreach (var response in responses)
         {
-            var history = await analyticsRepo.GetQuestionHistoryAsync(userId, response.QuestionId, ct);
-            if (history is null || history.TimesAttempted < 5) continue;
+            var progress = await analyticsRepo.GetQuestionProgressAsync(userId, response.QuestionId, ct);
+            if (progress is null || progress.TimesAttempted < 5) continue;
 
-            var correctRate = history.TimesAttempted > 0
-                ? (decimal)history.CorrectCount / history.TimesAttempted * 100
+            var correctRate = progress.TimesAttempted > 0
+                ? (decimal)progress.CorrectCount / progress.TimesAttempted * 100
                 : 0;
 
             var systemLevel = correctRate switch

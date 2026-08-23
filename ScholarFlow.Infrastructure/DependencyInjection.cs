@@ -54,6 +54,7 @@ public static class DependencyInjection
         services.AddScoped<IEmailService, ResendEmailService>();
         services.AddHostedService<OtpCleanupService>();
         services.AddHostedService<ExpiredExamSessionService>();
+        services.AddHostedService<ExamRawDataRetentionService>();
         services.AddHostedService<StudyReminderService>();
 
         services.Configure<PushNotificationSettings>(configuration.GetSection("PushNotifications"));

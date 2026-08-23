@@ -18,6 +18,7 @@ public class ExamSession : AggregateRoot
 
     public Guid UserId { get; private set; }
     public Guid? PaperId { get; private set; }       // null for personalized sessions
+    public Guid? TopicId { get; private set; }
     public Guid? SubjectId { get; private set; }
     public DateTime StartTime { get; private set; }
     public DateTime? EndTime { get; private set; }
@@ -35,6 +36,7 @@ public class ExamSession : AggregateRoot
 
     public ApplicationUser User { get; set; } = null!;
     public Paper? Paper { get; set; }
+    public Topic? Topic { get; set; }
     public Subject? Subject { get; set; }
     public IReadOnlyList<UserResponse> UserResponses => _userResponses.AsReadOnly();
     public IReadOnlyList<ExamSessionQuestion> SessionQuestions => _sessionQuestions.AsReadOnly();
@@ -48,7 +50,8 @@ public class ExamSession : AggregateRoot
         Guid? paperId,
         Guid? subjectId,
         ExamMode mode,
-        int? timeLimitMinutes = null)
+        int? timeLimitMinutes = null,
+        Guid? topicId = null)
     {
         if (timeLimitMinutes.HasValue && timeLimitMinutes.Value <= 0)
             throw new DomainException("Time limit must be greater than 0 minutes.");
@@ -60,6 +63,7 @@ public class ExamSession : AggregateRoot
             Id = Guid.NewGuid(),
             UserId = userId,
             PaperId = paperId,
+            TopicId = topicId,
             SubjectId = subjectId,
             StartTime = startedAt,
             LastActivityAt = startedAt,

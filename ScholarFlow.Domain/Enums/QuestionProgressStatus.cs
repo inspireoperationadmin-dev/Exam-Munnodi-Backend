@@ -3,5 +3,6 @@ namespace ScholarFlow.Domain.Enums;
 public enum QuestionProgressStatus
 {
     NeedsRevision = 1,
-    Mastered = 2
+    Improving = 2,
+    Mastered = 3
 }

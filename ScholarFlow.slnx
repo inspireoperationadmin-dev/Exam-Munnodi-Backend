@@ -5,6 +5,7 @@
     <Project Path="Modules/ScholarFlow.Modules.Examination/ScholarFlow.Modules.Examination.csproj" />
     <Project Path="Modules/ScholarFlow.Modules.Identity/ScholarFlow.Modules.Identity.csproj" />
     <Project Path="Modules/ScholarFlow.Modules.Notifications/ScholarFlow.Modules.Notifications.csproj" />
+    <Project Path="Modules/ScholarFlow.Modules.Subscriptions/ScholarFlow.Modules.Subscriptions.csproj" />
     <Project Path="Modules/ScholarFlow.Modules.UserProfiles/ScholarFlow.Modules.UserProfiles.csproj" />
   </Folder>
   <Project Path="ScholarFlow.Domain/ScholarFlow.Domain.csproj" />

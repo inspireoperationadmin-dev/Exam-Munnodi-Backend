@@ -7,4 +7,5 @@ namespace ScholarFlow.Modules.Examination.Commands.StartTopicExamSession;
 public sealed record StartTopicExamSessionCommand(
     Guid TopicId,
     int Limit,
-    ExamMode Mode) : IRequest<StartSessionResultDto>;
+    ExamMode Mode,
+    Guid? ReplaceSessionId = null) : IRequest<StartSessionResultDto>;

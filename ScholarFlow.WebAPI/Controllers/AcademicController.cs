@@ -222,6 +222,7 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
     // ── Questions ─────────────────────────────────────────────────────────────
 
     [HttpGet("papers/{paperId:guid}/questions")]
+    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher},{AppRole.SuperAdmin}")]
     public async Task<IActionResult> GetQuestions(Guid paperId, CancellationToken ct)
         => Ok(await mediator.Send(new GetPaperQuestionsQuery(paperId), ct));
 
@@ -265,6 +266,7 @@ public sealed class AcademicController(IMediator mediator) : ControllerBase
     // ── Explanations ──────────────────────────────────────────────────────────
 
     [HttpGet("questions/{questionId:guid}/explanation")]
+    [Authorize(Roles = $"{AppRole.Admin},{AppRole.Teacher},{AppRole.SuperAdmin}")]
     public async Task<IActionResult> GetExplanation(Guid questionId, CancellationToken ct)
         => Ok(await mediator.Send(new GetExplanationByQuestionIdQuery(questionId), ct));
 

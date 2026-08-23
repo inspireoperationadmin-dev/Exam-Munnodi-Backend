@@ -6,14 +6,16 @@ using ScholarFlow.Domain.Interfaces;
 using ScholarFlow.Domain.Interfaces.Repositories;
 using ScholarFlow.Modules.Academic.Public;
 using ScholarFlow.Modules.Examination.DTOs;
+using ScholarFlow.Modules.Examination.Services;
 using ScholarFlow.SharedKernel.Exceptions;
 
 namespace ScholarFlow.Modules.Examination.Commands.StartTopicExamSession;
 
 public sealed class StartTopicExamSessionCommandHandler(
-    IExamSessionRepository examRepo,
     IExplanationRepository explanationRepo,
     ISqlConnectionFactory  sql,
+    ISubscriptionsApi      subscriptionsApi,
+    IExamSessionStartPolicy sessionStartPolicy,
     ICurrentUser           currentUser)
     : IRequestHandler<StartTopicExamSessionCommand, StartSessionResultDto>
 {
@@ -23,6 +25,8 @@ public sealed class StartTopicExamSessionCommandHandler(
 
     public async Task<StartSessionResultDto> Handle(StartTopicExamSessionCommand request, CancellationToken ct)
     {
+        await subscriptionsApi.EnsureActiveAccessAsync(currentUser.UserId, ct);
+
         using var conn = sql.CreateConnection();
 
         // 1. Fetch SubjectId and all available questions belonging to this Topic
@@ -42,9 +46,13 @@ public sealed class StartTopicExamSessionCommandHandler(
                 q.ManualDifficulty,
                 q.SystemDifficulty
             FROM Questions q
+            INNER JOIN Papers p ON p.Id = q.PaperId
             INNER JOIN SubTopics st ON st.Id = q.SubTopicId
             INNER JOIN Topics t ON t.Id = st.TopicId
-            WHERE st.TopicId = @TopicId AND q.IsDeleted = 0
+            WHERE st.TopicId = @TopicId
+              AND q.IsDeleted = 0
+              AND p.IsDeleted = 0
+              AND p.IsPublic = 1
             """, new { request.TopicId })).ToList();
 
         if (questionPool.Count == 0)
@@ -59,9 +67,11 @@ public sealed class StartTopicExamSessionCommandHandler(
                 QuestionId,
                 TimesAttempted,
                 LastAnswerCorrect,
+                LastResponseWasAnswered,
+                MasteryScore,
                 Status,
                 LastSeenAt
-            FROM StudentTopicQuestionProgresses
+            FROM StudentQuestionProgresses
             WHERE UserId = @UserId AND QuestionId IN @QuestionIds
             """, new
             {
@@ -87,34 +97,66 @@ public sealed class StartTopicExamSessionCommandHandler(
             paperId:        null, 
             subjectId:      subjectId.Value,
             mode:           request.Mode,
-            timeLimitMinutes: request.Mode == ExamMode.TopicPractice ? null : selectedIds.Count);
+            timeLimitMinutes: request.Mode == ExamMode.TopicPractice
+                ? null
+                : ExamTimeLimitCalculator.CalculateRealPaperPacedMinutes(selectedIds.Count),
+            topicId:         request.TopicId);
 
-        await examRepo.AddAsync(session, ct);
+        await sessionStartPolicy.EnsureCanStartAsync(session, request.ReplaceSessionId, ct);
 
-        // 4. Pre-populate UserResponse & ExamSessionQuestion with sequential layout OrderIndexes
-        for (int i = 0; i < selectedIds.Count; i++)
+        var usageToken = request.Mode == ExamMode.TopicExam
+            ? await subscriptionsApi.ConsumeExamUsageAsync(
+                currentUser.UserId,
+                SubscriptionUsageFeature.UnitExam,
+                ct)
+            : null;
+
+        try
         {
-            var qId = selectedIds[i];
-
-            await examRepo.AddResponseAsync(new UserResponse
+            // 4. Pre-populate UserResponse & ExamSessionQuestion with sequential layout OrderIndexes
+            var responses = new List<UserResponse>(selectedIds.Count);
+            var sessionQuestions = new List<ExamSessionQuestion>(selectedIds.Count);
+            for (int i = 0; i < selectedIds.Count; i++)
             {
-                Id             = Guid.NewGuid(),
-                SessionId      = session.Id,
-                QuestionId     = qId,
-                OrderIndex     = i + 1, 
-                ResponseStatus = ResponseStatus.Unvisited
-            }, ct);
+                var qId = selectedIds[i];
 
-            await examRepo.AddSessionQuestionAsync(new ExamSessionQuestion
-            {
-                Id         = Guid.NewGuid(),
-                SessionId  = session.Id,
-                QuestionId = qId,
-                OrderIndex = i + 1
-            }, ct);
+                responses.Add(new UserResponse
+                {
+                    Id             = Guid.NewGuid(),
+                    SessionId      = session.Id,
+                    QuestionId     = qId,
+                    OrderIndex     = i + 1,
+                    ResponseStatus = ResponseStatus.Unvisited
+                });
+
+                sessionQuestions.Add(new ExamSessionQuestion
+                {
+                    Id         = Guid.NewGuid(),
+                    SessionId  = session.Id,
+                    QuestionId = qId,
+                    OrderIndex = i + 1
+                });
+            }
+
+            await sessionStartPolicy.PersistAsync(
+                session,
+                responses,
+                sessionQuestions,
+                request.ReplaceSessionId,
+                ct);
         }
+        catch
+        {
+            if (usageToken is not null)
+            {
+                await subscriptionsApi.ReleaseExamUsageAsync(
+                    currentUser.UserId,
+                    usageToken,
+                    CancellationToken.None);
+            }
 
-        await examRepo.SaveChangesAsync(ct);
+            throw;
+        }
 
         // 5. Query detailed question texts and option lists using Dapper (Added ORDER BY)
         var rows = await conn.QueryAsync<QuestionRow>("""
@@ -130,9 +172,12 @@ public sealed class StartTopicExamSessionCommandHandler(
                         o.OptionImageUrl,
                         o.IsCorrect     AS OptionIsCorrect
                     FROM Questions q
+                    INNER JOIN Papers p ON p.Id = q.PaperId
                     LEFT JOIN Options o ON o.QuestionId = q.Id
                     WHERE q.Id IN @QuestionIds
-                    AND q.IsDeleted  = 0
+                      AND q.IsDeleted  = 0
+                      AND p.IsDeleted = 0
+                      AND p.IsPublic = 1
                     ORDER BY o.Label -- <-- Corrected T-SQL comment style [1]
                     """,
             new { QuestionIds = selectedIds });
@@ -239,6 +284,8 @@ public sealed class StartTopicExamSessionCommandHandler(
         public Guid QuestionId { get; set; }
         public int TimesAttempted { get; set; }
         public bool LastAnswerCorrect { get; set; }
+        public bool LastResponseWasAnswered { get; set; }
+        public decimal MasteryScore { get; set; }
         public QuestionProgressStatus Status { get; set; }
         public DateTime LastSeenAt { get; set; }
     }
@@ -258,9 +305,7 @@ public sealed class StartTopicExamSessionCommandHandler(
 
         var needsRevisionQuestions = pool
             .Where(q => progressByQuestionId.TryGetValue(q.QuestionId, out var progress)
-                     && progress.TimesAttempted > 0
-                     && (progress.Status == QuestionProgressStatus.NeedsRevision
-                      || !progress.LastAnswerCorrect))
+                     && NeedsPractice(progress))
             .ToList();
 
         var unvisitedQuestions = pool
@@ -270,8 +315,10 @@ public sealed class StartTopicExamSessionCommandHandler(
         var masteredQuestions = pool
             .Where(q => progressByQuestionId.TryGetValue(q.QuestionId, out var progress)
                      && progress.TimesAttempted > 0
+                     && progress.LastResponseWasAnswered
                      && progress.Status == QuestionProgressStatus.Mastered
-                     && progress.LastAnswerCorrect)
+                     && progress.LastAnswerCorrect
+                     && progress.MasteryScore >= 100)
             .ToList();
 
         var needsRevisionTarget = (int)Math.Round(totalQuestions * NeedsRevisionRatio, MidpointRounding.AwayFromZero);
@@ -280,18 +327,18 @@ public sealed class StartTopicExamSessionCommandHandler(
 
         var selected = new List<Guid>(totalQuestions);
 
-        PickDiverse(needsRevisionQuestions, selected, needsRevisionTarget, recentQuestionIds, rng);
-        PickDiverse(unvisitedQuestions, selected, unvisitedTarget, recentQuestionIds, rng);
-        PickDiverse(masteredQuestions, selected, masteredTarget, recentQuestionIds, rng);
+        PickDiverse(needsRevisionQuestions, selected, needsRevisionTarget, [], rng, progressByQuestionId);
+        PickDiverse(unvisitedQuestions, selected, unvisitedTarget, recentQuestionIds, rng, progressByQuestionId);
+        PickDiverse(masteredQuestions, selected, masteredTarget, recentQuestionIds, rng, progressByQuestionId);
 
         if (selected.Count < totalQuestions)
         {
-            FillRemaining([needsRevisionQuestions, unvisitedQuestions, masteredQuestions], selected, totalQuestions, recentQuestionIds, rng);
+            FillRemaining([needsRevisionQuestions, unvisitedQuestions, masteredQuestions, pool], selected, totalQuestions, recentQuestionIds, rng, progressByQuestionId);
         }
 
         if (selected.Count < totalQuestions)
         {
-            FillRemaining([needsRevisionQuestions, unvisitedQuestions, masteredQuestions], selected, totalQuestions, new HashSet<Guid>(), rng);
+            FillRemaining([needsRevisionQuestions, unvisitedQuestions, masteredQuestions, pool], selected, totalQuestions, [], rng, progressByQuestionId);
         }
 
         return selected
@@ -300,17 +347,25 @@ public sealed class StartTopicExamSessionCommandHandler(
             .ToList();
     }
 
+    private static bool NeedsPractice(TopicQuestionProgressRow progress)
+        => !progress.LastResponseWasAnswered
+        || progress.TimesAttempted > 0
+            && (!progress.LastAnswerCorrect
+                || progress.Status != QuestionProgressStatus.Mastered
+                || progress.MasteryScore < 100);
+
     private static void FillRemaining(
         IReadOnlyList<IReadOnlyList<QuestionPoolItem>> buckets,
         List<Guid> selected,
         int totalQuestions,
         HashSet<Guid> recentQuestionIds,
-        Random rng)
+        Random rng,
+        IReadOnlyDictionary<Guid, TopicQuestionProgressRow> progressByQuestionId)
     {
         foreach (var bucket in buckets)
         {
             if (selected.Count >= totalQuestions) return;
-            PickDiverse(bucket, selected, totalQuestions - selected.Count, recentQuestionIds, rng);
+            PickDiverse(bucket, selected, totalQuestions - selected.Count, recentQuestionIds, rng, progressByQuestionId);
         }
     }
 
@@ -319,7 +374,8 @@ public sealed class StartTopicExamSessionCommandHandler(
         List<Guid> selected,
         int needed,
         HashSet<Guid> recentQuestionIds,
-        Random rng)
+        Random rng,
+        IReadOnlyDictionary<Guid, TopicQuestionProgressRow> progressByQuestionId)
     {
         if (needed <= 0 || source.Count == 0) return;
 
@@ -341,7 +397,8 @@ public sealed class StartTopicExamSessionCommandHandler(
             .GroupBy(q => q.SubTopicId)
             .OrderBy(_ => rng.Next())
             .Select(group => new Queue<QuestionPoolItem>(group
-                .OrderBy(q => q.EffectiveDifficulty)
+                .OrderBy(q => SelectionPriority(q, progressByQuestionId))
+                .ThenBy(q => q.EffectiveDifficulty)
                 .ThenBy(_ => rng.Next())))
             .ToList();
 
@@ -361,5 +418,21 @@ public sealed class StartTopicExamSessionCommandHandler(
                     subTopicQueues.Remove(queue);
             }
         }
+    }
+
+    private static decimal SelectionPriority(
+        QuestionPoolItem question,
+        IReadOnlyDictionary<Guid, TopicQuestionProgressRow> progressByQuestionId)
+    {
+        if (!progressByQuestionId.TryGetValue(question.QuestionId, out var progress))
+            return 50;
+
+        if (!progress.LastResponseWasAnswered)
+            return 10;
+
+        if (progress.TimesAttempted > 0 && !progress.LastAnswerCorrect)
+            return 0;
+
+        return progress.MasteryScore;
     }
 }

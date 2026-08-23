@@ -4,13 +4,19 @@ using ScholarFlow.Domain.Entities;
 
 namespace ScholarFlow.Infrastructure.Persistence.Configurations;
 
-public class StudentTopicQuestionProgressConfiguration : IEntityTypeConfiguration<StudentTopicQuestionProgress>
+public class StudentQuestionProgressConfiguration : IEntityTypeConfiguration<StudentQuestionProgress>
 {
-    public void Configure(EntityTypeBuilder<StudentTopicQuestionProgress> builder)
+    public void Configure(EntityTypeBuilder<StudentQuestionProgress> builder)
     {
         builder.HasKey(p => p.Id);
 
+        builder.Property(p => p.MasteryScore).HasPrecision(5, 2);
+
         builder.Property(p => p.Status)
+            .HasConversion<string>()
+            .HasMaxLength(32);
+
+        builder.Property(p => p.LastAttemptMode)
             .HasConversion<string>()
             .HasMaxLength(32);
 
@@ -27,5 +33,7 @@ public class StudentTopicQuestionProgressConfiguration : IEntityTypeConfiguratio
         builder.HasIndex(p => new { p.UserId, p.QuestionId }).IsUnique();
         builder.HasIndex(p => new { p.UserId, p.SubjectId, p.TopicId });
         builder.HasIndex(p => new { p.UserId, p.SubTopicId, p.Status });
+        builder.HasIndex(p => new { p.UserId, p.LastSeenAt });
+        builder.HasIndex(p => new { p.UserId, p.LastAnswerCorrect });
     }
 }

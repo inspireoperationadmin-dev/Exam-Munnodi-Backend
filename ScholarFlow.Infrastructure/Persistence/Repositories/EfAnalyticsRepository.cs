@@ -1,18 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using ScholarFlow.Domain.Entities;
-using ScholarFlow.Domain.Enums;
 using ScholarFlow.Domain.Interfaces.Repositories;
 
 namespace ScholarFlow.Infrastructure.Persistence.Repositories;
 
 public sealed class EfAnalyticsRepository(ApplicationDbContext db) : IAnalyticsRepository
 {
-    public Task<StudentQuestionHistory?> GetQuestionHistoryAsync(Guid userId, Guid questionId, CancellationToken ct = default)
-        => db.StudentQuestionHistories
-            .FirstOrDefaultAsync(h => h.UserId == userId && h.QuestionId == questionId, ct);
-
-    public Task<StudentTopicQuestionProgress?> GetTopicQuestionProgressAsync(Guid userId, Guid questionId, CancellationToken ct = default)
-        => db.StudentTopicQuestionProgresses
+    public Task<StudentQuestionProgress?> GetQuestionProgressAsync(Guid userId, Guid questionId, CancellationToken ct = default)
+        => db.StudentQuestionProgresses
             .FirstOrDefaultAsync(p => p.UserId == userId && p.QuestionId == questionId, ct);
 
     public Task<StudentSubTopicPerformance?> GetSubTopicPerformanceAsync(Guid userId, Guid subTopicId, CancellationToken ct = default)
@@ -23,11 +18,8 @@ public sealed class EfAnalyticsRepository(ApplicationDbContext db) : IAnalyticsR
         => db.StudentSubjectPerformances
             .FirstOrDefaultAsync(p => p.UserId == userId && p.SubjectId == subjectId, ct);
 
-    public async Task AddQuestionHistoryAsync(StudentQuestionHistory history, CancellationToken ct = default)
-        => await db.StudentQuestionHistories.AddAsync(history, ct);
-
-    public async Task AddTopicQuestionProgressAsync(StudentTopicQuestionProgress progress, CancellationToken ct = default)
-        => await db.StudentTopicQuestionProgresses.AddAsync(progress, ct);
+    public async Task AddQuestionProgressAsync(StudentQuestionProgress progress, CancellationToken ct = default)
+        => await db.StudentQuestionProgresses.AddAsync(progress, ct);
 
     public async Task AddSubTopicPerformanceAsync(StudentSubTopicPerformance performance, CancellationToken ct = default)
         => await db.StudentSubTopicPerformances.AddAsync(performance, ct);
@@ -51,14 +43,17 @@ public sealed class EfAnalyticsRepository(ApplicationDbContext db) : IAnalyticsR
             return;
 
         var totalQuestions = await db.Questions
-            .CountAsync(q => q.SubTopicId == subTopicId, ct);
+            .CountAsync(q => q.SubTopicId == subTopicId
+                          && !q.IsDeleted
+                          && !q.Paper.IsDeleted
+                          && q.Paper.IsPublic, ct);
 
-        var progressRows = await db.StudentTopicQuestionProgresses
+        var progressRows = await db.StudentQuestionProgresses
             .Where(p => p.UserId == userId && p.SubTopicId == subTopicId)
             .ToListAsync(ct);
 
         var uniqueAttempted = progressRows.Count;
-        var mastered = progressRows.Count(p => p.Status == QuestionProgressStatus.Mastered);
+        var mastered = progressRows.Count(p => p.MasteryScore >= 100);
         var attempts = progressRows.Sum(p => p.TimesAttempted);
         var correct = progressRows.Sum(p => p.CorrectCount);
 
@@ -83,7 +78,9 @@ public sealed class EfAnalyticsRepository(ApplicationDbContext db) : IAnalyticsR
         performance.TotalAttempts = attempts;
         performance.CorrectCount = correct;
         performance.CoveragePercentage = CalculatePercentage(uniqueAttempted, totalQuestions);
-        performance.MasteryPercentage = CalculatePercentage(mastered, totalQuestions);
+        performance.MasteryPercentage = totalQuestions > 0
+            ? Math.Round(progressRows.Sum(p => p.MasteryScore) / totalQuestions, 2)
+            : 0;
         performance.CorrectPercentage = CalculatePercentage(correct, attempts);
         performance.HealthPercentage = CalculatePercentage(mastered, uniqueAttempted);
         performance.LastUpdated = DateTime.UtcNow;

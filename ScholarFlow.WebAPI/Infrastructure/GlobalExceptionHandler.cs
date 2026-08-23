@@ -15,6 +15,18 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
     {
         var (statusCode, error) = exception switch
         {
+            SessionStartConflictException ex => (
+                ex.StatusCode,
+                new ApiError(
+                    ex.Code,
+                    ex.Message,
+                    Metadata: new Dictionary<string, object?>
+                    {
+                        ["sessionId"] = ex.SessionIds.Count == 1 ? ex.SessionIds[0] : null,
+                        ["sessionIds"] = ex.SessionIds,
+                        ["allowedActions"] = ex.AllowedActions
+                    })),
+
             ValidationException ex => (
                 StatusCodes.Status400BadRequest,
                 new ApiError(

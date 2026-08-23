@@ -1,16 +1,25 @@
 using Dapper;
 using MediatR;
 using ScholarFlow.Domain.Interfaces;
+using ScholarFlow.Domain.Enums;
 using ScholarFlow.Modules.Examination.DTOs;
 
 namespace ScholarFlow.Modules.Examination.Queries.GetPaperQuestionsForExam;
 
 public sealed class GetPaperQuestionsForExamQueryHandler(
-    ISqlConnectionFactory sql)
+    ISqlConnectionFactory sql,
+    ISubscriptionsApi subscriptionsApi,
+    ICurrentUser currentUser)
     : IRequestHandler<GetPaperQuestionsForExamQuery, List<ExamQuestionDto>>
 {
     public async Task<List<ExamQuestionDto>> Handle(GetPaperQuestionsForExamQuery request, CancellationToken ct)
     {
+        await subscriptionsApi.EnsureCanStartPaperAsync(
+            currentUser.UserId,
+            request.PaperId,
+            ExamMode.PaperPractice,
+            ct);
+
         using var conn = sql.CreateConnection();
 
         var rows = await conn.QueryAsync<QuestionRow>("""
@@ -26,9 +35,12 @@ public sealed class GetPaperQuestionsForExamQueryHandler(
                 
                 o.OptionImageUrl
             FROM Questions q
+            INNER JOIN Papers p ON p.Id = q.PaperId
             LEFT JOIN Options o ON o.QuestionId = q.Id
             WHERE q.PaperId   = @PaperId
               AND q.IsDeleted  = 0
+              AND p.IsDeleted = 0
+              AND p.IsPublic = 1
             ORDER BY q.OrderIndex, o.Label
             """,
             new { request.PaperId });

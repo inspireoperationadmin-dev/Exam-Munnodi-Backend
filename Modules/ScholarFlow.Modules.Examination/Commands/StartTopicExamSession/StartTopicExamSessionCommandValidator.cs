@@ -12,5 +12,12 @@ public sealed class StartTopicExamSessionCommandValidator : AbstractValidator<St
         RuleFor(x => x.Mode)
             .Must(mode => mode.IsTopicMode())
             .WithMessage("Topic sessions support only TopicExam or TopicPractice mode.");
+        RuleFor(x => x.ReplaceSessionId)
+            .NotEqual(Guid.Empty)
+            .When(x => x.ReplaceSessionId.HasValue);
+        RuleFor(x => x.ReplaceSessionId)
+            .Null()
+            .When(x => x.Mode == ExamMode.TopicExam)
+            .WithMessage("A timed unit exam cannot replace another session.");
     }
 }

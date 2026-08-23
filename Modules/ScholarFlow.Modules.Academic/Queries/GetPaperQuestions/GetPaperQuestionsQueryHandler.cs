@@ -3,14 +3,22 @@ using MediatR;
 using ScholarFlow.Domain.Enums;
 using ScholarFlow.Domain.Interfaces;
 using ScholarFlow.Modules.Academic.DTOs;
+using ScholarFlow.SharedKernel.Exceptions;
 
 namespace ScholarFlow.Modules.Academic.Queries.GetPaperQuestions;
 
-public sealed class GetPaperQuestionsQueryHandler(ISqlConnectionFactory sql)
+public sealed class GetPaperQuestionsQueryHandler(
+    ISqlConnectionFactory sql,
+    ICurrentUser currentUser)
     : IRequestHandler<GetPaperQuestionsQuery, List<QuestionWithOptionsDto>>
 {
     public async Task<List<QuestionWithOptionsDto>> Handle(GetPaperQuestionsQuery request, CancellationToken ct)
     {
+        if (currentUser.IsInRole(AppRole.Student))
+        {
+            throw new ForbiddenException("Students must use the examination question endpoint.");
+        }
+
         using var conn = sql.CreateConnection();
 
         var rows = await conn.QueryAsync<QuestionRow>("""

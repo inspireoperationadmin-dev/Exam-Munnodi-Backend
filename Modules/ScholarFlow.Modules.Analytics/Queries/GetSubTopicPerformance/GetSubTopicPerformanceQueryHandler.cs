@@ -1,5 +1,6 @@
 using Dapper;
 using MediatR;
+using ScholarFlow.Domain.Enums;
 using ScholarFlow.Domain.Interfaces;
 using ScholarFlow.Modules.Analytics.DTOs;
 
@@ -7,11 +8,17 @@ namespace ScholarFlow.Modules.Analytics.Queries.GetSubTopicPerformance;
 
 public sealed class GetSubTopicPerformanceQueryHandler(
     ISqlConnectionFactory sql,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    ISubscriptionsApi subscriptionsApi)
     : IRequestHandler<GetSubTopicPerformanceQuery, List<SubTopicPerformanceDto>>
 {
     public async Task<List<SubTopicPerformanceDto>> Handle(GetSubTopicPerformanceQuery request, CancellationToken ct)
     {
+        await subscriptionsApi.EnsureProgressAccessAsync(
+            currentUser.UserId,
+            ProgressAccessLevel.Detailed,
+            ct);
+
         using var conn = sql.CreateConnection();
 
         var rows = await conn.QueryAsync<SubTopicPerformanceDto>("""
