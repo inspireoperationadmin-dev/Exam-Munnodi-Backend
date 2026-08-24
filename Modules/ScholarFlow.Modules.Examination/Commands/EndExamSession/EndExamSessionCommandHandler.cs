@@ -98,9 +98,12 @@ public sealed class EndExamSessionCommandHandler(
         int correctCount = session.UserResponses.Count(r => r.IsCorrect);
         int skippedCount = session.UserResponses.Count(r => !r.SelectedOptionId.HasValue);
         int wrongCount   = session.UserResponses.Count - correctCount - skippedCount;
-        int timeTaken    = session.Duration.HasValue
-            ? Math.Max(0, (int)session.Duration.Value.TotalSeconds)
-            : 0;
+        int activeTimeTaken = session.UserResponses.Sum(response => Math.Max(0, response.TimeSpentSeconds));
+        int timeTaken = activeTimeTaken > 0
+            ? activeTimeTaken
+            : session.Duration.HasValue
+                ? Math.Max(0, (int)session.Duration.Value.TotalSeconds)
+                : 0;
 
         return new EndSessionResultDto(
             SessionId:        session.Id,

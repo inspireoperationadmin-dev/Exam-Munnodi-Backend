@@ -13,6 +13,8 @@ public sealed class GetSessionDetailQueryHandler(
     ISubscriptionsApi subscriptionsApi)
     : IRequestHandler<GetSessionDetailQuery, SessionDetailDto>
 {
+    private static readonly TimeSpan ReviewRetentionPeriod = TimeSpan.FromDays(3);
+
     public async Task<SessionDetailDto> Handle(GetSessionDetailQuery request, CancellationToken ct)
     {
         await subscriptionsApi.EnsureActiveAccessAsync(currentUser.UserId, ct);
@@ -26,6 +28,7 @@ public sealed class GetSessionDetailQueryHandler(
                 es.UserId,
                 es.PaperId,
                 COALESCE(es.SubjectId, p.SubjectId) AS SubjectId,
+                es.TopicId,
                 p.Title         AS PaperTitle,
                 es.StartTime,
                 es.ExpiresAt,
@@ -56,7 +59,8 @@ public sealed class GetSessionDetailQueryHandler(
                 ur.SelectedOptionId,
                 ur.IsCorrect,
                 ur.MarksAwarded,
-                ur.ResponseStatus
+                ur.ResponseStatus,
+                ur.TimeSpentSeconds
             FROM UserResponses ur
             JOIN ExamSessionQuestions esq
                 ON esq.SessionId  = ur.SessionId
@@ -79,17 +83,19 @@ public sealed class GetSessionDetailQueryHandler(
         int skippedCount = responseList.Count(r => r.SelectedOptionId is null);
         int wrongCount   = responseList.Count - correctCount - skippedCount;
 
-        if (responseList.Count == 0
-            && session.Status != nameof(ExamSessionStatus.InProgress)
-            && session.EndTime.HasValue)
-        {
-            throw new BadRequestException("Session question details are available for 3 days after the session ends.");
-        }
+        var hasReviewData = responseList.Count > 0;
+        var activeTimeTaken = responses.Sum(r => Math.Max(0, r.TimeSpentSeconds));
+        var wallClockTime = session.EndTime.HasValue
+            ? Math.Max(0, (int)(session.EndTime.Value - session.StartTime).TotalSeconds)
+            : 0;
+        var timeTakenSeconds = activeTimeTaken > 0 ? activeTimeTaken : wallClockTime;
+        var affectsMastery = session.Mode is nameof(ExamMode.MockExam) or nameof(ExamMode.TopicExam);
 
         return new SessionDetailDto(
             SessionId:    session.SessionId,
             PaperId:      session.PaperId,
             SubjectId:    session.SubjectId,
+            TopicId:      session.TopicId,
             PaperTitle:   session.PaperTitle,
             StartTime:    session.StartTime,
             ServerNow:    DateTime.UtcNow,
@@ -101,9 +107,14 @@ public sealed class GetSessionDetailQueryHandler(
             ObtainedMarks: session.ObtainedMarks,
             TotalMarks:   session.TotalMarks,
             Percentage:   session.Percentage,
+            IsPassing:    session.Percentage >= 40,
             CorrectCount: correctCount,
             WrongCount:   wrongCount,
             SkippedCount: skippedCount,
+            TimeTakenSeconds: timeTakenSeconds,
+            AffectsMastery: affectsMastery,
+            HasReviewData: hasReviewData,
+            ReviewAvailableUntil: session.EndTime?.Add(ReviewRetentionPeriod),
             Responses:    responseList);
     }
 
@@ -112,6 +123,7 @@ public sealed class GetSessionDetailQueryHandler(
         Guid UserId,
         Guid? PaperId,
         Guid? SubjectId,
+        Guid? TopicId,
         string? PaperTitle,
         DateTime StartTime,
         DateTime? ExpiresAt,
@@ -129,5 +141,6 @@ public sealed class GetSessionDetailQueryHandler(
         Guid? SelectedOptionId,
         bool IsCorrect,
         decimal MarksAwarded,
-        string ResponseStatus);
+        string ResponseStatus,
+        int TimeSpentSeconds);
 }
