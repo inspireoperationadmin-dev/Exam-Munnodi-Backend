@@ -13,8 +13,10 @@ namespace ScholarFlow.WebAPI.Controllers;
 public sealed class AdminAnalyticsController(IMediator mediator) : ControllerBase
 {
     [HttpGet("students")]
-    public async Task<IActionResult> GetStudentProgress(CancellationToken ct)
-        => Ok(await mediator.Send(new GetAdminStudentProgressQuery(), ct));
+    public async Task<IActionResult> GetStudentProgress(
+        [FromQuery] AdminStudentStatusFilter? status,
+        CancellationToken ct)
+        => Ok(await mediator.Send(new GetAdminStudentProgressQuery(status), ct));
 
     [HttpGet("students/{studentId:guid}")]
     public async Task<IActionResult> GetStudentProgressDetail(Guid studentId, CancellationToken ct)

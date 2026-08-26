@@ -14,6 +14,14 @@ public sealed class GetAdminStudentProgressQueryHandler(ISqlConnectionFactory sq
     {
         using var conn = sql.CreateConnection();
 
+        var status = request.Status switch
+        {
+            AdminStudentStatusFilter.NotStarted => "Not started",
+            AdminStudentStatusFilter.SetupOnly => "Setup only",
+            null => null,
+            _ => request.Status.ToString()
+        };
+
         var rows = (await conn.QueryAsync<StudentProgressRow>("""
             WITH StudentUsers AS (
                 SELECT
@@ -94,32 +102,47 @@ public sealed class GetAdminStudentProgressQueryHandler(ISqlConnectionFactory sq
                 JOIN StudentSubjectSelections sss ON sss.StudentProfileId = sp.Id
                 JOIN Subjects s ON s.Id = sss.SubjectId
                 GROUP BY sp.UserId
+            ),
+            StudentRows AS (
+                SELECT
+                    su.Id AS StudentId,
+                    COALESCE(NULLIF(su.FullName, ''), su.Email) AS FullName,
+                    COALESCE(su.Email, '') AS Email,
+                    COALESCE(su.ProfilePhoneNumber, su.UserPhoneNumber) AS PhoneNumber,
+                    CAST(su.Medium AS nvarchar(32)) AS Medium,
+                    su.StreamName,
+                    su.ExamYear,
+                    COALESCE(su.JoinedAt, CAST('1900-01-01' AS datetime2)) AS JoinedAt,
+                    la.LastActiveAt,
+                    COALESCE(ms.MockExamsCompleted, 0) AS MockExamsCompleted,
+                    COALESCE(ts.TopicExamsCompleted, 0) AS TopicExamsCompleted,
+                    COALESCE(ms.AverageMockScore, 0) AS AverageMockScore,
+                    COALESCE(ms.BestMockScore, 0) AS BestMockScore,
+                    CAST(ROUND(COALESCE(cw.CurrentAverage, 0) - COALESCE(pw.PreviousAverage, 0), 2) AS decimal(5, 2)) AS WeeklyChangePercentage,
+                    CASE
+                        WHEN la.LastActiveAt IS NULL THEN N'Not started'
+                        WHEN la.LastActiveAt < DATEADD(day, -7, SYSUTCDATETIME()) THEN N'Inactive'
+                        WHEN COALESCE(ms.MockExamsCompleted, 0) + COALESCE(ts.TopicExamsCompleted, 0) = 0 THEN N'Setup only'
+                        WHEN COALESCE(cw.CurrentAverage, 0) - COALESCE(pw.PreviousAverage, 0) > 3 THEN N'Improving'
+                        WHEN COALESCE(cw.CurrentAverage, 0) - COALESCE(pw.PreviousAverage, 0) < -3 THEN N'Decreasing'
+                        ELSE N'Stable'
+                    END AS Status,
+                    COALESCE(ss.Subjects, '') AS SubjectsCsv
+                FROM StudentUsers su
+                LEFT JOIN MockStats ms ON ms.UserId = su.Id
+                LEFT JOIN TopicStats ts ON ts.UserId = su.Id
+                LEFT JOIN CurrentWeek cw ON cw.UserId = su.Id
+                LEFT JOIN PreviousWeek pw ON pw.UserId = su.Id
+                LEFT JOIN LastActivity la ON la.UserId = su.Id
+                LEFT JOIN StudentSubjects ss ON ss.UserId = su.Id
             )
-            SELECT
-                su.Id AS StudentId,
-                COALESCE(NULLIF(su.FullName, ''), su.Email) AS FullName,
-                COALESCE(su.Email, '') AS Email,
-                COALESCE(su.ProfilePhoneNumber, su.UserPhoneNumber) AS PhoneNumber,
-                CAST(su.Medium AS nvarchar(32)) AS Medium,
-                su.StreamName,
-                su.ExamYear,
-                COALESCE(su.JoinedAt, CAST('1900-01-01' AS datetime2)) AS JoinedAt,
-                la.LastActiveAt,
-                COALESCE(ms.MockExamsCompleted, 0) AS MockExamsCompleted,
-                COALESCE(ts.TopicExamsCompleted, 0) AS TopicExamsCompleted,
-                COALESCE(ms.AverageMockScore, 0) AS AverageMockScore,
-                COALESCE(ms.BestMockScore, 0) AS BestMockScore,
-                CAST(ROUND(COALESCE(cw.CurrentAverage, 0) - COALESCE(pw.PreviousAverage, 0), 2) AS decimal(5, 2)) AS WeeklyChangePercentage,
-                COALESCE(ss.Subjects, '') AS SubjectsCsv
-            FROM StudentUsers su
-            LEFT JOIN MockStats ms ON ms.UserId = su.Id
-            LEFT JOIN TopicStats ts ON ts.UserId = su.Id
-            LEFT JOIN CurrentWeek cw ON cw.UserId = su.Id
-            LEFT JOIN PreviousWeek pw ON pw.UserId = su.Id
-            LEFT JOIN LastActivity la ON la.UserId = su.Id
-            LEFT JOIN StudentSubjects ss ON ss.UserId = su.Id
-            ORDER BY la.LastActiveAt DESC, su.JoinedAt DESC
-            """)).ToList();
+            SELECT *
+            FROM StudentRows
+            WHERE @Status IS NULL
+               OR (@Status = N'Active' AND LastActiveAt >= DATEADD(day, -7, SYSUTCDATETIME()))
+               OR (@Status <> N'Active' AND Status = @Status)
+            ORDER BY LastActiveAt DESC, JoinedAt DESC
+            """, new { Status = status })).ToList();
 
         return rows.Select(row => new AdminStudentProgressSummaryDto(
             row.StudentId,
@@ -136,7 +159,7 @@ public sealed class GetAdminStudentProgressQueryHandler(ISqlConnectionFactory sq
             row.AverageMockScore,
             row.BestMockScore,
             row.WeeklyChangePercentage,
-            GetStatus(row.LastActiveAt, row.WeeklyChangePercentage, row.MockExamsCompleted, row.TopicExamsCompleted),
+            row.Status,
             SplitSubjects(row.SubjectsCsv)))
             .ToList();
     }
@@ -145,16 +168,6 @@ public sealed class GetAdminStudentProgressQueryHandler(ISqlConnectionFactory sq
         => string.IsNullOrWhiteSpace(csv)
             ? []
             : csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-    private static string GetStatus(DateTime? lastActiveAt, decimal weeklyChange, int mockExams, int topicExams)
-    {
-        if (!lastActiveAt.HasValue) return "Not started";
-        if (lastActiveAt.Value < DateTime.UtcNow.AddDays(-7)) return "Inactive";
-        if (mockExams + topicExams == 0) return "Setup only";
-        if (weeklyChange > 3) return "Improving";
-        if (weeklyChange < -3) return "Decreasing";
-        return "Stable";
-    }
 
     private sealed class StudentProgressRow
     {
@@ -172,6 +185,7 @@ public sealed class GetAdminStudentProgressQueryHandler(ISqlConnectionFactory sq
         public decimal AverageMockScore { get; set; }
         public decimal BestMockScore { get; set; }
         public decimal WeeklyChangePercentage { get; set; }
+        public string Status { get; set; } = string.Empty;
         public string? SubjectsCsv { get; set; }
     }
 }
