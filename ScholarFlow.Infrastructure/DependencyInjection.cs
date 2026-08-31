@@ -44,6 +44,7 @@ public static class DependencyInjection
         // ── JWT ───────────────────────────────────────────────────────────────
         services.Configure<JwtSettings>(configuration.GetSection("JwtSettings"));
         services.AddScoped<ITokenService, TokenService>();
+        services.AddScoped<IRegistrationTicketService, RegistrationTicketService>();
 
         // ── Email (Resend) ────────────────────────────────────────────────────
         services.Configure<ResendSettings>(configuration.GetSection("Resend"));

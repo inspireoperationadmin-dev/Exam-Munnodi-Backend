@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using ScholarFlow.Infrastructure;
@@ -68,6 +69,33 @@ builder.Services
             ValidAudience            = builder.Configuration["JwtSettings:Audience"],
             IssuerSigningKey         = new SymmetricSecurityKey(
                                             Encoding.UTF8.GetBytes(jwtSecret))
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var userIdValue = context.Principal?.FindFirst("sub")?.Value;
+                if (!Guid.TryParse(userIdValue, out var userId))
+                {
+                    context.Fail("The access token does not identify a valid user.");
+                    return;
+                }
+
+                var db = context.HttpContext.RequestServices
+                    .GetRequiredService<ApplicationDbContext>();
+                var account = await db.Users
+                    .AsNoTracking()
+                    .Where(user => user.Id == userId)
+                    .Select(user => new { user.LockoutEnabled, user.LockoutEnd })
+                    .FirstOrDefaultAsync(context.HttpContext.RequestAborted);
+
+                if (account is null ||
+                    (account.LockoutEnabled && account.LockoutEnd > DateTimeOffset.UtcNow))
+                {
+                    context.Fail("Account access is restricted.");
+                }
+            }
         };
     });
 

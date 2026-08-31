@@ -16,4 +16,6 @@ public sealed record AdminStudentProgressSummaryDto(
     decimal BestMockScore,
     decimal WeeklyChangePercentage,
     string Status,
+    string AccountStatus,
+    DateTimeOffset? AccessRestrictedUntil,
     IReadOnlyList<string> Subjects);

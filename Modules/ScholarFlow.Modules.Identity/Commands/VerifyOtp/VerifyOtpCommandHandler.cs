@@ -14,10 +14,13 @@ namespace ScholarFlow.Modules.Identity.Commands.VerifyOtp;
 public sealed class VerifyOtpCommandHandler(
     ApplicationDbContext         db,
     UserManager<ApplicationUser> userManager,
-    ITokenService                tokenService)
-    : IRequestHandler<VerifyOtpCommand, AuthResponse>
+    ITokenService                tokenService,
+    IRegistrationTicketService   registrationTicketService)
+    : IRequestHandler<VerifyOtpCommand, VerifyOtpResponse>
 {
-    public async Task<AuthResponse> Handle(VerifyOtpCommand request, CancellationToken ct)
+    private const int MaximumFailedAttempts = 3;
+
+    public async Task<VerifyOtpResponse> Handle(VerifyOtpCommand request, CancellationToken ct)
     {
         var email    = request.Email.Trim().ToLowerInvariant();
         var codeHash = HashCode(request.Code.Trim());
@@ -28,30 +31,46 @@ public sealed class VerifyOtpCommandHandler(
             .OrderByDescending(o => o.CreatedAt)
             .FirstOrDefaultAsync(ct);
 
-        if (otp is null || otp.CodeHash != codeHash)
-            throw new BadRequestException("Invalid or expired OTP code. Please request a new one.");
+        if (otp is null)
+            throw new BadRequestException("Invalid or expired verification code.");
 
-        // ── 2. Mark OTP verified (extends expiry 15 min — see OtpCode.MarkVerified) ─
+        if (!HashesMatch(otp.CodeHash, codeHash))
+        {
+            otp.RecordFailedAttempt(MaximumFailedAttempts);
+            await db.SaveChangesAsync(ct);
+            throw new BadRequestException("Invalid or expired verification code.");
+        }
+
         otp.MarkVerified();
 
-        // ── 3. Confirm email on the Identity user ─────────────────────────────
-        var user = await userManager.FindByEmailAsync(email)
-            ?? throw new NotFoundException("User not found.");
+        var user = await userManager.FindByEmailAsync(email);
+        if (user is null)
+        {
+            await db.SaveChangesAsync(ct);
+            var ticket = registrationTicketService.Create(otp.Id, email, otp.ExpiresAt);
 
+            return new VerifyOtpResponse(
+                Email: email,
+                RequiresAccountCreation: true,
+                RegistrationTicket: ticket.Token,
+                RegistrationTicketExpiresAt: ticket.ExpiresAt,
+                Authentication: null);
+        }
+
+        // Compatibility for accounts created by the previous registration flow.
         user.EmailConfirmed = true;
         var updateResult = await userManager.UpdateAsync(user);
         if (!updateResult.Succeeded)
             throw new BadRequestException("Failed to confirm email.");
 
-        // ── 4. Clean up: delete this OTP now — it served its purpose ──────────
-        db.OtpCodes.Remove(otp);
+        var otpRows = await db.OtpCodes.Where(o => o.Email == email).ToListAsync(ct);
+        db.OtpCodes.RemoveRange(otpRows);
         await db.SaveChangesAsync(ct);
 
-        // ── 5. Issue new JWT and return full AuthResponse ───────────────────
         var roles = await userManager.GetRolesAsync(user);
         var role  = roles.FirstOrDefault() ?? string.Empty;
 
-        return new AuthResponse(
+        var authentication = new AuthResponse(
             AccessToken:     tokenService.GenerateToken(user.Id, user.Email!, role),
             ExpiresAt:       tokenService.TokenExpiresAt(),
             UserId:          user.Id,
@@ -59,8 +78,20 @@ public sealed class VerifyOtpCommandHandler(
             Role:            role,
             IsEmailVerified: true,
             IsProfileSetup:  user.IsProfileSetup);
+
+        return new VerifyOtpResponse(
+            Email: email,
+            RequiresAccountCreation: false,
+            RegistrationTicket: null,
+            RegistrationTicketExpiresAt: null,
+            Authentication: authentication);
     }
 
     private static string HashCode(string code)
         => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
+
+    private static bool HashesMatch(string storedHash, string submittedHash)
+        => CryptographicOperations.FixedTimeEquals(
+            Convert.FromHexString(storedHash),
+            Convert.FromHexString(submittedHash));
 }

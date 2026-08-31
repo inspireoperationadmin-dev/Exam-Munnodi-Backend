@@ -14,7 +14,7 @@ public sealed class AuthController(IMediator mediator) : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register(
         [FromBody] RegisterCommand command, CancellationToken ct)
-        => Ok(await mediator.Send(command, ct));
+        => Ok(await mediator.Send(command, ct)); // Final account creation after OTP verification.
 
     [HttpPost("login")]
     public async Task<IActionResult> Login(
@@ -33,7 +33,7 @@ public sealed class AuthController(IMediator mediator) : ControllerBase
     public async Task<IActionResult> VerifyOtp(
         [FromBody] VerifyOtpCommand command, CancellationToken ct)
     {
-        var result = await mediator.Send(command, ct); // returns AuthResponse
+        var result = await mediator.Send(command, ct);
         return Ok(result);
     }
 }

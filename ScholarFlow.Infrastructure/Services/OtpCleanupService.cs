@@ -7,9 +7,7 @@ using ScholarFlow.Infrastructure.Persistence;
 namespace ScholarFlow.Infrastructure.Services;
 
 /// <summary>
-/// Runs every hour and deletes OtpCode rows that are outside the 1-hour rate-limit
-/// window (i.e. created more than 1 hour ago). This keeps the table clean without
-/// affecting the per-email rate limiting count used by SendOtpCommandHandler.
+/// Deletes OTP rows after the six-hour send-limit window has elapsed.
 /// </summary>
 public sealed class OtpCleanupService(
     IServiceScopeFactory scopeFactory,
@@ -37,7 +35,7 @@ public sealed class OtpCleanupService(
             await using var scope = scopeFactory.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            var cutoff  = DateTime.UtcNow.AddHours(-1);
+            var cutoff  = DateTime.UtcNow.AddHours(-6);
             var deleted = await db.OtpCodes
                 .Where(o => o.CreatedAt < cutoff)
                 .ExecuteDeleteAsync(ct);

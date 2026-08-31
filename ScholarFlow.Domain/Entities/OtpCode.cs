@@ -8,6 +8,7 @@ public sealed class OtpCode
     public DateTime CreatedAt  { get; private set; }
     public DateTime ExpiresAt  { get; private set; }
     public bool     IsVerified { get; private set; }
+    public int      FailedAttemptCount { get; private set; }
 
     private OtpCode() { }
 
@@ -19,6 +20,7 @@ public sealed class OtpCode
         CreatedAt  = DateTime.UtcNow,
         ExpiresAt  = DateTime.UtcNow.AddMinutes(10), // 10 min window to enter the code
         IsVerified = false,
+        FailedAttemptCount = 0,
     };
     
     public void MarkVerified()
@@ -26,4 +28,14 @@ public sealed class OtpCode
         IsVerified = true;
         ExpiresAt  = DateTime.UtcNow.AddMinutes(15); // grace window for next step
     }
+
+    public void RecordFailedAttempt(int maximumAttempts)
+    {
+        FailedAttemptCount++;
+
+        if (FailedAttemptCount >= maximumAttempts)
+            Invalidate();
+    }
+
+    public void Invalidate() => ExpiresAt = DateTime.UtcNow;
 }

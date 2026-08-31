@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using MediatR;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using ScholarFlow.Domain.Entities;
@@ -13,57 +14,76 @@ namespace ScholarFlow.Modules.Identity.Commands.SendOtp;
 public sealed class SendOtpCommandHandler(
     ApplicationDbContext db,
     IEmailService        emailService,
+    UserManager<ApplicationUser> userManager,
     ILogger<SendOtpCommandHandler> logger)
     : IRequestHandler<SendOtpCommand>
 {
-    private const int MaxSendsPerHour = 3;
+    private const int MaxSendsPerWindow = 3;
+    private static readonly TimeSpan SendWindow = TimeSpan.FromHours(6);
+    private static readonly TimeSpan ResendCooldown = TimeSpan.FromMinutes(1);
 
     public async Task Handle(SendOtpCommand request, CancellationToken ct)
     {
         var email      = request.Email.Trim().ToLowerInvariant();
         var now        = DateTime.UtcNow;
-        var oneHourAgo = now.AddHours(-1);
-
-        // ── 1. Rate limit: max 3 OTP sends per email per hour ─────────────────
-        var recentCount = await db.OtpCodes
-            .CountAsync(o => o.Email == email && o.CreatedAt >= oneHourAgo, ct);
-
-        if (recentCount >= MaxSendsPerHour)
-            throw new TooManyRequestsException(
-                "Too many OTP requests. Please wait before requesting a new code.");
-
-        
-
-        // ── 2. Generate a cryptographically random 6-digit code ───────────────
-        var code     = RandomNumberGenerator.GetInt32(100_000, 999_999).ToString();
+        var windowStart = now.Subtract(SendWindow);
+        var code = RandomNumberGenerator.GetInt32(100_000, 1_000_000).ToString();
         var codeHash = HashCode(code);
 
-        // ── 3. Remove OTPs older than 1 hour for this email ───────────────────
-        //    (recent ones are kept so the rate-limit count above stays accurate)
-        var old = await db.OtpCodes
-            .Where(o => o.Email == email && o.CreatedAt < oneHourAgo)
-            .ToListAsync(ct);
+        var existingUser = await userManager.FindByEmailAsync(email);
+        if (existingUser is { EmailConfirmed: true })
+            return;
 
-        db.OtpCodes.RemoveRange(old);
+        OtpCode otp;
+        await using (var transaction = await db.Database.BeginTransactionAsync(
+                         System.Data.IsolationLevel.Serializable, ct))
+        {
+            var latest = await db.OtpCodes
+                .Where(o => o.Email == email)
+                .OrderByDescending(o => o.CreatedAt)
+                .FirstOrDefaultAsync(ct);
 
-        // ── 4. Persist the new OTP ────────────────────────────────────────────
-        var otp = OtpCode.Create(email, codeHash);
-        db.OtpCodes.Add(otp);
-        await db.SaveChangesAsync(ct);
+            if (latest is not null && now - latest.CreatedAt < ResendCooldown)
+                throw new TooManyRequestsException(
+                    "Please wait before requesting another verification code.");
 
-        // ── 5. Attempt email delivery (non-fatal in dev) ──────────────────────
+            var recentCount = await db.OtpCodes
+                .CountAsync(o => o.Email == email && o.CreatedAt >= windowStart, ct);
+
+            if (recentCount >= MaxSendsPerWindow)
+                throw new TooManyRequestsException(
+                    "Too many verification codes requested. Please try again later.");
+
+            var old = await db.OtpCodes
+                .Where(o => o.Email == email && o.CreatedAt < windowStart)
+                .ToListAsync(ct);
+            db.OtpCodes.RemoveRange(old);
+
+            var activeCodes = await db.OtpCodes
+                .Where(o => o.Email == email && o.ExpiresAt > now)
+                .ToListAsync(ct);
+            foreach (var activeCode in activeCodes)
+                activeCode.Invalidate();
+
+            otp = OtpCode.Create(email, codeHash);
+            db.OtpCodes.Add(otp);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+
         try
         {
             await emailService.SendOtpAsync(email, code, ct);
         }
         catch (Exception ex)
         {
-            // Email delivery failed but the OTP is already saved in the DB.
-            // The code is also printed in the server log above.
             logger.LogWarning(ex,
-                "[OTP] Email delivery failed for {Email}. " +
-                "OTP was saved to DB — check server logs for the code.",
+                "[OTP] Email delivery failed for {Email}.",
                 email);
+
+            db.OtpCodes.Remove(otp);
+            await db.SaveChangesAsync(ct);
+            throw;
         }
     }
 

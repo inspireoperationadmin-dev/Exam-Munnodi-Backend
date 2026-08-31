@@ -2,7 +2,6 @@ using MediatR;
 using Microsoft.AspNetCore.Identity;
 using ScholarFlow.Domain.Entities;
 using ScholarFlow.Infrastructure.Services;
-using ScholarFlow.Modules.Identity.Commands.SendOtp;
 using ScholarFlow.Modules.Identity.DTOs;
 using ScholarFlow.SharedKernel.Exceptions;
 
@@ -11,8 +10,7 @@ namespace ScholarFlow.Modules.Identity.Commands.Login;
 public sealed class LoginCommandHandler(
     UserManager<ApplicationUser>  userManager,
     SignInManager<ApplicationUser> signInManager,
-    ITokenService                  tokenService,
-    IMediator                     mediator)
+    ITokenService                  tokenService)
     : IRequestHandler<LoginCommand, AuthResponse>
 {
     public async Task<AuthResponse> Handle(LoginCommand request, CancellationToken ct)
@@ -29,8 +27,19 @@ public sealed class LoginCommandHandler(
         if (!signInResult.Succeeded)
         {
             if (signInResult.IsLockedOut)
+            {
+                var lockoutEnd = await userManager.GetLockoutEndDateAsync(user);
+                if (lockoutEnd >= DateTimeOffset.MaxValue.AddYears(-1))
+                    throw new ForbiddenException(
+                        "Your account has been deactivated. Please contact support for assistance.");
+
+                if (lockoutEnd.HasValue)
+                    throw new ForbiddenException(
+                        $"Your account is suspended until {lockoutEnd.Value.UtcDateTime:dd MMM yyyy, HH:mm} UTC.");
+
                 throw new ForbiddenException(
                     "Account is temporarily locked. Please try again later.");
+            }
 
             throw new UnauthorizedException("Invalid email or password.");
         }
@@ -38,14 +47,9 @@ public sealed class LoginCommandHandler(
         var roles = await userManager.GetRolesAsync(user);
         var role  = roles.FirstOrDefault() ?? string.Empty;
 
-        // ── 3. Email not verified → resend OTP, return unverified state ───────
-        //    Frontend sees IsEmailVerified=false and navigates to OTP page.
-        //    The issued token has no access to protected routes (middleware enforces this).
+        // Compatibility for accounts created before verification-first registration.
         if (!user.EmailConfirmed)
         {
-            // Resend OTP (reuses SendOtpCommand — rate limit still applies)
-            await mediator.Send(new SendOtpCommand(user.Email!), ct);
-
             return new AuthResponse(
                 AccessToken:     tokenService.GenerateToken(user.Id, user.Email!, role),
                 ExpiresAt:       tokenService.TokenExpiresAt(),

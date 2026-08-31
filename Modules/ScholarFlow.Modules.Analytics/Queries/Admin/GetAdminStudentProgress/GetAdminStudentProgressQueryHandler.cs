@@ -28,6 +28,8 @@ public sealed class GetAdminStudentProgressQueryHandler(ISqlConnectionFactory sq
                     u.Id,
                     u.Email,
                     u.PhoneNumber AS UserPhoneNumber,
+                    u.LockoutEnabled,
+                    u.LockoutEnd,
                     sp.FullName,
                     sp.PhoneNumber AS ProfilePhoneNumber,
                     sp.Medium,
@@ -127,6 +129,15 @@ public sealed class GetAdminStudentProgressQueryHandler(ISqlConnectionFactory sq
                         WHEN COALESCE(cw.CurrentAverage, 0) - COALESCE(pw.PreviousAverage, 0) < -3 THEN N'Decreasing'
                         ELSE N'Stable'
                     END AS Status,
+                    CASE
+                        WHEN su.LockoutEnabled = 1 AND su.LockoutEnd >= CAST('9998-01-01' AS datetimeoffset) THEN N'Deactivated'
+                        WHEN su.LockoutEnabled = 1 AND su.LockoutEnd > SYSDATETIMEOFFSET() THEN N'Suspended'
+                        ELSE N'Active'
+                    END AS AccountStatus,
+                    CASE
+                        WHEN su.LockoutEnabled = 1 AND su.LockoutEnd > SYSDATETIMEOFFSET() THEN su.LockoutEnd
+                        ELSE NULL
+                    END AS AccessRestrictedUntil,
                     COALESCE(ss.Subjects, '') AS SubjectsCsv
                 FROM StudentUsers su
                 LEFT JOIN MockStats ms ON ms.UserId = su.Id
@@ -160,6 +171,8 @@ public sealed class GetAdminStudentProgressQueryHandler(ISqlConnectionFactory sq
             row.BestMockScore,
             row.WeeklyChangePercentage,
             row.Status,
+            row.AccountStatus,
+            row.AccessRestrictedUntil,
             SplitSubjects(row.SubjectsCsv)))
             .ToList();
     }
@@ -186,6 +199,8 @@ public sealed class GetAdminStudentProgressQueryHandler(ISqlConnectionFactory sq
         public decimal BestMockScore { get; set; }
         public decimal WeeklyChangePercentage { get; set; }
         public string Status { get; set; } = string.Empty;
+        public string AccountStatus { get; set; } = string.Empty;
+        public DateTimeOffset? AccessRestrictedUntil { get; set; }
         public string? SubjectsCsv { get; set; }
     }
 }
